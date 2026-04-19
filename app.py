@@ -28,7 +28,7 @@ if 'balance' not in st.session_state: st.session_state.balance = 10000000
 if 'portfolio' not in st.session_state: st.session_state.portfolio = []
 if 'selected_stock' not in st.session_state: st.session_state.selected_stock = None
 
-# 2. 프로페셔널 CSS 스타일링
+# 2. 프로페셔널 CSS 스타일링 + [모바일 잘림 방지 코드 추가]
 st.markdown("""
     <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
@@ -54,8 +54,23 @@ st.markdown("""
     
     .analysis-box { background-color: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 20px; }
     .investor-card { background-color: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 15px; text-align: center; }
+
+    /* [핵심] 모바일에서 옆으로 안 잘리고 위아래로 쌓이게 만드는 코드 */
+    @media (max-width: 600px) {
+        div[data-testid="column"] {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+            min-width: 100% !important;
+        }
+    }
     </style>
     """, unsafe_allow_html=True)
+
+if 'candidates' not in st.session_state: st.session_state.candidates = []
+if 'rt_results' not in st.session_state: st.session_state.rt_results = []
+if 'balance' not in st.session_state: st.session_state.balance = 10000000 
+if 'portfolio' not in st.session_state: st.session_state.portfolio = []
+if 'selected_stock' not in st.session_state: st.session_state.selected_stock = None
 
 # 3. 데이터 엔진
 def check_vol(row):
