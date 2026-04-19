@@ -6,6 +6,19 @@ from datetime import datetime, timedelta
 import concurrent.futures
 import random
 
+st.set_page_config(page_title="JJ Trading Studio", layout="wide")
+
+# CSS: 모바일에서도 꽉 차게 보이도록 최적화
+st.markdown("""
+    <style>
+    .stApp { background-color: #0d1117; color: #c9d1d9; }
+    div.stButton > button[kind="primary"] { background-color: #ffffff !important; color: #000000 !important; font-weight: 900 !important; width: 100% !important; }
+    .analysis-box { background-color: #161b22; border: 1px solid #30363d; padding: 15px; border-radius: 10px; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# [여기에 아까 우리가 짰던 데이터/차트 엔진 로직이 들어갑니다]
+# (이하 전체 풀코드는 쩡아가 나중에 편할 때 가져가서 덮어씌워!)
 # 1. 페이지 설정
 st.set_page_config(page_title="JJ Trading Studio", layout="wide")
 
