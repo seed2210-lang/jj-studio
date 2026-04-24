@@ -10,7 +10,7 @@ import json
 import os
 
 # ==========================================
-# 🚨 JJ 스튜디오 전용 도어락 (비밀번호 시스템)
+# 🚨 멀까~요? (비밀번호 시스템)
 # ==========================================
 def check_password():
     """비밀번호가 맞으면 True를 반환하는 함수"""
@@ -187,17 +187,27 @@ def render_analysis(sel_row, tab_key):
     if is_rise_signal:
         st.success(f"🎯 매도 시그널: 당일 이후 목표 매도 단가는 **{target_price:,}원** 부근으로 설정하세요.")
         
-    df_chart = sel_row['데이터']
+df_chart = sel_row['데이터']
     fig = go.Figure()
     fig.add_trace(go.Candlestick(x=df_chart.index, open=df_chart['Open'], high=df_chart['High'], low=df_chart['Low'], close=df_chart['Close'], name='캔들'))
     
     recent_low_idx = df_chart['Low'].iloc[-20:].idxmin()
     recent_low_val = df_chart['Low'].loc[recent_low_idx]
     
-    fig.add_trace(go.Scatter(x=[recent_low_idx], y=[recent_low_val * 0.95], mode='markers', marker=dict(symbol='star', size=18, color='yellow'), name='최적 매수가'))
-    fig.add_trace(go.Scatter(x=[df_chart.index[-1]], y=[target_price], mode='markers', marker=dict(symbol='star', size=18, color='green'), name='예상 매도가'))
+    # 별표 사이즈도 폰에 맞춰 12~15 정도로 살짝 키워주면 더 잘 보여!
+    fig.add_trace(go.Scatter(x=[recent_low_idx], y=[recent_low_val * 0.95], mode='markers', marker=dict(symbol='star', size=12, color='red'), name='최적 매수가'))
+    fig.add_trace(go.Scatter(x=[df_chart.index[-1]], y=[target_price], mode='markers', marker=dict(symbol='star', size=12, color='blue'), name='예상 매도가'))
     
-    fig.update_layout(template="plotly_dark", margin=dict(l=10,r=10,t=30,b=10), height=350, xaxis_rangeslider_visible=False)
+    # --- 모바일 최적화 레이아웃 설정 ---
+    fig.update_layout(
+        template="plotly_dark", 
+        margin=dict(l=0, r=0, t=20, b=0), # 좌우 여백 0, 상단 여백 최소화
+        height=280, # 높이를 280으로 줄임 (폰에서 딱 적당해)
+        xaxis_rangeslider_visible=False,
+        showlegend=False, # 범례를 숨겨서 차트 영역을 넓힘
+        xaxis=dict(tickfont=dict(size=10)), # 날짜 글자 크기 축소
+        yaxis=dict(tickfont=dict(size=10))  # 가격 숫자 크기 축소
+    )
     
     st.plotly_chart(fig, use_container_width=True, key=f"chart_{actual_name}_{tab_key}")
     
@@ -238,7 +248,8 @@ def render_analysis(sel_row, tab_key):
             save_data() 
             st.rerun()
 
-st.title("🌼잘살아보자🌼")
+# 기존 st.title("🌼잘살아보자🌼") 대신 이걸 넣어봐!
+st.markdown("<h2 style='text-align: center; color: #d4af37; font-size: 22px;'>🌼잘살아보자🌼</h2>", unsafe_allow_html=True)
 st.markdown(f"<div class='gold-text'>💰 실시간 모의 자산: {st.session_state.balance:,} 원</div>", unsafe_allow_html=True)
 
 tab_search, tab_radar, tab_fav, tab_port = st.tabs(["🔍 검색", "📡 레이더", "⭐ 관심종목", "💼 보유"])
