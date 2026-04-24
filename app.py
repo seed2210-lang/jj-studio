@@ -22,7 +22,7 @@ st.markdown("""
     .rise-text { color: #ff4b4b; font-weight: bold; }
     .fall-text { color: #4b8bff; font-weight: bold; }
     
-    /* 표 내부 패딩을 최소화해서 폭 줄이기 */
+    /* 표 내부 패딩 최소화 및 폰트 축소로 폭 줄이기 */
     div.stDataFrame > div > div > table > thead > tr > th { font-size: 12px !important; padding: 2px 4px !important; }
     div.stDataFrame > div > div > table > tbody > tr > td { font-size: 12px !important; padding: 2px 4px !important; }
     
@@ -35,9 +35,11 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# 세션 스테이트 초기화 (관심종목 추가)
 if 'rt_results' not in st.session_state: st.session_state.rt_results = []
 if 'balance' not in st.session_state: st.session_state.balance = 10000000 
 if 'portfolio' not in st.session_state: st.session_state.portfolio = []
+if 'favorites' not in st.session_state: st.session_state.favorites = [] # 즐겨찾기 리스트
 
 @st.cache_data
 def load_all_stocks():
@@ -64,9 +66,13 @@ def get_stock_data(item):
         df['변동폭'] = df['Close'] - df['Open']
         curr_change = int(df['변동폭'].iloc[-1])
         
-        # [수정] 표 오류 방지를 위해 HTML 제거하고 직관적인 기호 사용
-        change_symbol = "🔺" if curr_change > 0 else ("🔻" if curr_change < 0 else "➖")
-        formatted_change_clean = f"{change_symbol} {abs(curr_change):,}원"
+        # [수정] 완벽한 한국형 주식 색상 화살표 적용
+        if curr_change > 0:
+            formatted_change_clean = f"🔴 ▲ {abs(curr_change):,}원"
+        elif curr_change < 0:
+            formatted_change_clean = f"🔵 ▼ {abs(curr_change):,}원"
+        else:
+            formatted_change_clean = f"➖ 0원"
 
         curr = df['Close'].iloc[-1]
         prev = df['Close'].iloc[-2]
@@ -80,7 +86,6 @@ def get_stock_data(item):
         signal_icon = "🔴" if is_agg else "🔵"
         signal_text = f"{signal_icon} 상승" if is_agg else f"{signal_icon} 관망"
         
-        # [추가] 단타 vs 장타 매매 전략 로직
         if expected_ratio < 8.0:
             trade_strategy = "⚡ 단타 (당일~1일 내 빠른 수익 실현 권장)"
         else:
@@ -92,15 +97,16 @@ def get_stock_data(item):
         dead_cross = (df['MA5'].iloc[-1] < df['MA20'].iloc[-1]) and (df['MA5'].iloc[-2] >= df['MA20'].iloc[-2])
         rebound_zone = curr <= low_20 * 1.05
         
+        # [수정] 모바일 화면 폭 축소를 위해 딕셔너리 키(컬럼명)를 짧게 변경
         return {
-            "시그널": signal_text, 
-            "종목명": item['종목명'], # 표에서는 깔끔하게 이름만
+            "신호": signal_text, 
+            "종목": item['종목명'], 
             "순수종목명": item['종목명'], 
             "코드": item['코드'],
-            "현재가": int(curr), 
-            "변동": formatted_change_clean, # 컬럼 이름도 짧게
+            "가격": int(curr), 
+            "변동": formatted_change_clean, 
             "수익%": expected_ratio,
-            "매매전략": trade_strategy, # 매매 전략 추가
+            "매매전략": trade_strategy,
             "데이터": df, 
             "고점": int(high_60), "저점": int(low_20),
             "분석": {
@@ -109,19 +115,24 @@ def get_stock_data(item):
         }
     except Exception as e: return None
 
+# 상승 종목 빨간색 배경 하이라이팅 함수
+def highlight_rows(row):
+    if '상승' in row['신호']:
+        return ['background-color: rgba(255, 75, 75, 0.2)'] * len(row)
+    return [''] * len(row)
+
 def render_analysis(sel_row):
     actual_name = sel_row['순수종목명']
     st.markdown(f"### 📊 {actual_name} 정밀 분석 리포트")
     
-    curr_price = sel_row['현재가']
+    curr_price = sel_row['가격']
     exp_return = sel_row['수익%']
     target_price = int(curr_price * (1 + exp_return/100))
-    is_rise_signal = "상승" in sel_row['시그널']
+    is_rise_signal = "상승" in sel_row['신호']
     color_class = "rise-text" if is_rise_signal else "fall-text"
     
     st.markdown(f"<h3 class='{color_class}'>현재 시세: {curr_price:,}원 (목표 상승여력 +{exp_return}%)</h3>", unsafe_allow_html=True)
     
-    # [추가] AI 매매 전략 표시
     st.info(f"💡 **JJ AI 매매 전략:** {sel_row['매매전략']}")
     
     if is_rise_signal:
@@ -157,19 +168,32 @@ def render_analysis(sel_row):
         """, unsafe_allow_html=True)
         
     st.write("")
-    if st.button(f"🚀 {actual_name} 모의 매수하기", type="primary", use_container_width=True, key=f"buy_{actual_name}"):
-        st.session_state.balance -= curr_price * 10
-        st.session_state.portfolio.append({"일시": datetime.now().strftime('%m-%d'), "종목명": actual_name, "단가": curr_price, "수량": 10})
-        st.success(f"✅ 체결 완료! {actual_name} 포트폴리오에 담겼어.")
+    
+    # [추가] 모의 매수 & 즐겨찾기 버튼 나란히 배치
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button(f"🚀 모의 매수하기", type="primary", use_container_width=True, key=f"buy_{actual_name}"):
+            st.session_state.balance -= curr_price * 10
+            st.session_state.portfolio.append({"일시": datetime.now().strftime('%m-%d'), "종목명": actual_name, "단가": curr_price, "수량": 10})
+            st.success(f"✅ 체결 완료!")
+    with col2:
+        is_fav = actual_name in st.session_state.favorites
+        fav_btn_text = "⭐ 관심종목 해제" if is_fav else "⭐ 관심종목 추가"
+        if st.button(fav_btn_text, use_container_width=True, key=f"fav_{actual_name}"):
+            if is_fav:
+                st.session_state.favorites.remove(actual_name)
+            else:
+                st.session_state.favorites.append(actual_name)
+            st.rerun()
 
-st.title("📱 JJ Trading Studio Mobile v4.5")
+st.title("📱 JJ Trading Studio Mobile Final")
 st.markdown(f"<div class='gold-text'>💰 실시간 모의 자산: {st.session_state.balance:,} 원</div>", unsafe_allow_html=True)
 
-tab_search, tab_radar, tab_port = st.tabs(["🔍 정밀검색", "📡 30개 레이더", "💼 포트폴리오"])
+# 탭 이름을 짧게 변경하여 모바일 가독성 업
+tab_search, tab_radar, tab_fav, tab_port = st.tabs(["🔍 검색", "📡 레이더", "⭐ 관심종목", "💼 보유"])
 
 with tab_search:
     search_input = st.text_input("공부하고 싶은 종목명 (예: 삼성전자)", "")
-    
     if st.button("📈 이 종목 정밀 분석하기", use_container_width=True):
         if search_input:
             matched_df = all_stocks_df[all_stocks_df['Name'] == search_input]
@@ -217,22 +241,25 @@ with tab_radar:
     if st.session_state.rt_results:
         df_res = pd.DataFrame(st.session_state.rt_results)
         
-        if '변동' not in df_res.columns:
+        if '신호' not in df_res.columns:
             st.session_state.rt_results = []
             st.warning("🔄 구조가 업데이트됐어! 스캔하기 버튼을 다시 한 번 눌러줘!")
         else:
-            st.write("👇 종목을 클릭하면 상세 분석이 나옵니다.")
+            st.write("👇 빨간 배경은 강한 상승 예측 종목이야!")
             
-            # 컬럼 폭 다이어트 설정
+            # [추가] Pandas Styler를 적용하여 상승 종목 빨간색 배경칠하기
+            display_cols = ['신호', '종목', '가격', '변동', '수익%']
+            styled_df = df_res[display_cols].style.apply(highlight_rows, axis=1)
+            
             event = st.dataframe(
-                df_res[['시그널', '종목명', '현재가', '변동', '수익%']], 
+                styled_df, 
                 use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row",
                 column_config={
-                    "시그널": st.column_config.Column("시그널", width="small"),
-                    "종목명": st.column_config.Column("종목명", width="medium"),
-                    "현재가": st.column_config.Column("가격", width="small"),
-                    "변동": st.column_config.Column("변동", width="small"),
-                    "수익%": st.column_config.Column("수익%", width="small"),
+                    "신호": st.column_config.Column(width="small"),
+                    "종목": st.column_config.Column(width="small"),
+                    "가격": st.column_config.Column(width="small"),
+                    "변동": st.column_config.Column(width="small"),
+                    "수익%": st.column_config.Column(width="small"),
                 }
             )
             
@@ -240,6 +267,39 @@ with tab_radar:
             sel_row = df_res.iloc[row_idx]
             st.divider()
             render_analysis(sel_row)
+
+# [추가] 즐겨찾기 탭 로직
+with tab_fav:
+    if st.session_state.favorites:
+        st.write("⭐ 내가 찜한 관심종목들의 실시간 상태야!")
+        if st.button("🔄 실시간 데이터 새로고침", use_container_width=True):
+            st.rerun()
+            
+        fav_results = []
+        with st.spinner("관심종목 데이터 불러오는 중..."):
+            for fav_name in st.session_state.favorites:
+                matched = all_stocks_df[all_stocks_df['Name'] == fav_name]
+                if not matched.empty:
+                    target_code = matched.iloc[0]['Code']
+                    res = get_stock_data({'코드': target_code, '종목명': fav_name})
+                    if res: fav_results.append(res)
+                    
+        if fav_results:
+            df_fav = pd.DataFrame(fav_results)
+            display_cols = ['신호', '종목', '가격', '변동', '수익%']
+            styled_fav = df_fav[display_cols].style.apply(highlight_rows, axis=1)
+            
+            event_fav = st.dataframe(
+                styled_fav, 
+                use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row"
+            )
+            
+            row_idx_fav = event_fav.selection.rows[0] if event_fav.selection.rows else 0
+            sel_row_fav = df_fav.iloc[row_idx_fav]
+            st.divider()
+            render_analysis(sel_row_fav)
+    else:
+        st.info("아직 찜한 종목이 없어! 분석 리포트에서 '⭐ 관심종목 추가' 버튼을 눌러봐.")
 
 with tab_port:
     if st.session_state.portfolio:
