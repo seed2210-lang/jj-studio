@@ -39,7 +39,7 @@ if not check_password():
 # ==========================================
 
 # (여기서부터 원래 있던 앱 설정 및 코드들이 시작되면 돼!)
-st.set_page_config(page_title="🌼냠냠해보자🌼", layout="wide")
+st.set_page_config(page_title="❤💛❤💛❤💛❤💛❤💛❤💛❤💛", layout="wide")
 
 st.markdown("""
     <style>
@@ -238,7 +238,7 @@ def render_analysis(sel_row, tab_key):
             save_data() 
             st.rerun()
 
-st.title("📱 JJ Trading Studio Mobile Pro")
+st.title("🌼잘살아보자🌼")
 st.markdown(f"<div class='gold-text'>💰 실시간 모의 자산: {st.session_state.balance:,} 원</div>", unsafe_allow_html=True)
 
 tab_search, tab_radar, tab_fav, tab_port = st.tabs(["🔍 검색", "📡 레이더", "⭐ 관심종목", "💼 보유"])
