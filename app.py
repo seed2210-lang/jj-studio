@@ -4,12 +4,13 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import concurrent.futures
+import random
 import numpy as np
 import json
 import os
 
 # ==========================================
-# 🚨 멀까~요? (비밀번호 시스템)
+# 🚨 오늘도30%먹자 (비밀번호 시스템)
 # ==========================================
 def check_password():
     def password_entered():
@@ -21,12 +22,12 @@ def check_password():
 
     if "password_correct" not in st.session_state:
         st.markdown("<h2 style='text-align: center; color: #d4af37;'>🔒 JJ Trading Studio</h2>", unsafe_allow_html=True)
-        st.text_input("나만의 비밀번호", type="password", on_change=password_entered, key="password")
+        st.text_input("비밀번호입력란", type="password", on_change=password_entered, key="password")
         return False
     elif not st.session_state["password_correct"]:
         st.markdown("<h2 style='text-align: center; color: #d4af37;'>🔒 JJ Trading Studio</h2>", unsafe_allow_html=True)
-        st.text_input("비밀번호를 입력해보시오", type="password", on_change=password_entered, key="password")
-        st.error("😕 앗! 비밀번호가 틀렸어. 다시 입력해 봐!")
+        st.text_input("나만아는 비밀💗", type="password", on_change=password_entered, key="password")
+        st.error("😕 앗! 까먹었어?")
         return False
     return True
 
@@ -36,6 +37,7 @@ if not check_password():
 
 st.set_page_config(page_title="❤💛❤💛❤💛❤💛❤💛❤💛❤💛", layout="wide")
 
+# CSS: 모바일 최적화 및 9대 지표 하이라이트 스타일
 st.markdown("""
     <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
@@ -44,7 +46,7 @@ st.markdown("""
     .gold-text { color: #d4af37; font-weight: bold; font-size: 22px; }
     div.stButton > button[kind="primary"] { background-color: #ffffff !important; color: #000000 !important; font-weight: 900 !important; width: 100% !important; border-radius: 8px;}
     div.stButton > button[kind="secondary"] { font-weight: 900 !important; width: 100% !important; border-radius: 8px;}
-    .analysis-box { background-color: #161b22; border: 1px solid #30363d; padding: 15px; border-radius: 10px; margin-top: 10px; font-size: 14px;}
+    .analysis-box { background-color: #161b22; border: 1px solid #30363d; padding: 15px; border-radius: 10px; margin-top: 10px; font-size: 14px; line-height: 1.6;}
     
     .rise-text { color: #ff4b4b; font-weight: bold; }
     .fall-text { color: #4b8bff; font-weight: bold; }
@@ -53,6 +55,7 @@ st.markdown("""
     div.stDataFrame > div > div > table > tbody > tr > td { font-size: 12px !important; padding: 2px 4px !important; }
     
     .highlight-positive { color: #ff4b4b; font-weight: bold; }
+    .highlight-negative { color: #4b8bff; font-weight: bold; }
 
     @media (max-width: 600px) {
         div[data-testid="column"] { width: 100% !important; flex: 1 1 100% !important; min-width: 100% !important; }
@@ -67,22 +70,19 @@ def load_data():
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+                return {"favorites": data.get("favorites", [])}
         except: pass
-    return {"balance": 10000000, "portfolio": [], "favorites": []}
+    return {"favorites": []}
 
 def save_data():
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump({
-            "balance": st.session_state.balance,
-            "portfolio": st.session_state.portfolio,
             "favorites": st.session_state.favorites
         }, f, ensure_ascii=False)
 
 if 'data_loaded' not in st.session_state:
     loaded = load_data()
-    st.session_state.balance = loaded["balance"]
-    st.session_state.portfolio = loaded["portfolio"]
     st.session_state.favorites = loaded["favorites"]
     st.session_state.data_loaded = True
 
@@ -125,13 +125,10 @@ def get_stock_data(item):
         high_60 = df['High'].iloc[-60:].max()
         low_20 = df['Low'].iloc[-20:].min()
         
-        # [핵심 로직 수정] 진짜 상승 여력 계산! 가짜 난수 삭제!
         expected_ratio = round(((high_60 - curr) / curr) * 100, 1)
-        
-        # 만약 전고점 돌파 중이라 상승여력이 0 이하라면, 최근 20일 변동폭을 기준으로 목표치 부여
         if expected_ratio <= 0:
             expected_ratio = round(((df['High'].max() - low_20) / curr) * 100 * 0.5, 1)
-            if expected_ratio <= 0: expected_ratio = 15.0 # 강한 신고가 돌파 종목은 기본 15% 세팅
+            if expected_ratio <= 0: expected_ratio = 15.0 
         
         is_agg = curr > df['High'].iloc[-6:-1].max()
         signal_icon = "🔴" if is_agg else "🔵"
@@ -143,6 +140,14 @@ def get_stock_data(item):
             hold_days = max(2, int(expected_ratio // 2.5))
             trade_strategy = f"🗓️ 스윙/장타 (예측 보유기간: 약 {hold_days}일 ~ {hold_days+2}일)"
         
+        if is_agg:
+            ai_news = f"[{item['종목명']}] 단기 저항선을 강하게 뚫어낸 '상승 추세' 종목이야! 기관/외인 수급이 붙으며 전고점({int(high_60):,}원)을 향해 랠리가 기대되는 자리. 지금 올라타기 좋은 타이밍!"
+        else:
+            if expected_ratio > 30:
+                ai_news = f"[{item['종목명']}] 예전 고점 대비 {expected_ratio}%나 오를 '잠재력'은 있지만, 아직 하락이 멈추지 않은 '낙폭 과대' 상태야. 덥석 물지 말고 바닥을 다지는지 '관망'하며 지켜봐야 해!"
+            else:
+                ai_news = f"[{item['종목명']}] 뚜렷한 상승 동력이 부족하고 박스권에 갇혀 눈치를 보고 있는 상태야. 확실한 거래량이 터질 때까지 매수는 보류하고 관망해."
+
         vol_surge = df['Volume'].iloc[-1] > df['Volume'].iloc[-5:-1].mean() * 1.5
         golden_cross = (df['MA5'].iloc[-1] > df['MA20'].iloc[-1]) and (df['MA5'].iloc[-2] <= df['MA20'].iloc[-2])
         dead_cross = (df['MA5'].iloc[-1] < df['MA20'].iloc[-1]) and (df['MA5'].iloc[-2] >= df['MA20'].iloc[-2])
@@ -155,12 +160,14 @@ def get_stock_data(item):
             "코드": item['코드'],
             "가격": int(curr), 
             "변동": formatted_change_clean, 
+            "변동액": curr_change,
             "수익%": expected_ratio,
             "매매전략": trade_strategy,
+            "AI뉴스": ai_news,
             "데이터": df, 
             "고점": int(high_60), "저점": int(low_20),
             "분석": {
-                "vol": vol_surge, "gc": golden_cross, "dc": dead_cross, "reb": rebound_zone
+                "vol": vol_surge, "gc": golden_cross, "dc": dead_cross, "reb": rebound_zone, "agg": is_agg
             }
         }
     except Exception as e: return None
@@ -182,6 +189,7 @@ def render_analysis(sel_row, tab_key):
     
     st.markdown(f"<h3 class='{color_class}'>현재 시세: {curr_price:,}원 (목표 상승여력 +{exp_return}%)</h3>", unsafe_allow_html=True)
     st.info(f"💡 **JJ AI 매매 전략:** {sel_row['매매전략']}")
+    st.warning(f"📰 **JJ AI 핵심 진단:**\n\n{sel_row['AI뉴스']}")
     
     if is_rise_signal:
         st.success(f"🎯 매도 시그널: 당일 이후 목표 매도 단가는 **{target_price:,}원** 부근으로 설정하세요.")
@@ -208,174 +216,108 @@ def render_analysis(sel_row, tab_key):
     
     st.plotly_chart(fig, use_container_width=True, key=f"chart_{actual_name}_{tab_key}")
     
+    a = sel_row['분석']
+    t1 = f"<span class='highlight-positive'>1️⃣ <b>거래량 폭발 신호:</b> [포착 🔴] 세력의 돈 유입 흔적</span>" if a['vol'] else "1️⃣ <b>거래량 추이:</b> [양호 🟢] 평이한 거래량 유지"
+    t2 = f"<span class='highlight-positive'>2️⃣ <b>골든크로스 타점:</b> [발생 🔴] 상승 랠리 초기 신호</span>" if a['gc'] else "2️⃣ <b>이동평균선:</b> [대기] 정배열 준비 중"
+    t3 = f"<span class='highlight-negative'>3️⃣ <b>데드크로스 위험:</b> [경고 🔵] 단기 하락 이탈 주의!</span>" if a['dc'] else "3️⃣ <b>추세 이탈도:</b> [안전 🟢] 추세 깨짐 없음"
+    t4 = f"<span class='highlight-positive'>4️⃣ <b>전고점 돌파:</b> [돌파 🔴] 저항선 뚫고 비상 중!</span>" if a['agg'] else f"4️⃣ <b>저항선 분석:</b> 최근 고점 {sel_row['고점']:,}원 (돌파 대기 중)"
+    t5 = f"<span class='highlight-positive'>5️⃣ <b>상대적 강세:</b> [강세 🔴] 오늘 시장에서 강한 방어력 보임</span>" if sel_row['변동액'] > 0 else "5️⃣ <b>시장 방어력:</b> 현재 시장 흐름에 편승하여 동기화 중"
+    t6 = f"<span class='highlight-positive'>6️⃣ <b>기술적 반등:</b> [진입 🔴] 바닥 지지선 터치, 반등 유력</span>" if a['reb'] else "6️⃣ <b>주가 위치:</b> 지지선 위에서 안정적 움직임"
+    t7 = "7️⃣ <b>메이저 수급:</b> 기관/외인 쌍끌이 유입 여부 확인 요망"
+    t8 = "8️⃣ <b>이평선 밀집:</b> 에너지가 크게 응축되며 방향성 결정 대기"
+    t9 = f"<span class='highlight-positive'>9️⃣ <b>회복 탄력성:</b> [강력 🔴] 남은 상승 여력 {sel_row['수익%']}%, 폭발적 단기 목표!</span>" if sel_row['수익%'] >= 15 else f"9️⃣ <b>회복 탄력성:</b> 전고점까지 남은 여력 {sel_row['수익%']}%"
+
     st.markdown("#### 🔍 9대 핵심 지표 분석 결과")
     with st.container():
         st.markdown(f"""
         <div class='analysis-box'>
-        1️⃣ <span class='highlight-positive'><b>거래량 폭발 신호:</b> {'[포착 🔴] 세력의 돈 유입 흔적' if sel_row['분석']['vol'] else '[양호 🟢] 안정적인 거래량 유지'}</span> <br>
-        2️⃣ <b>골든크로스 타점:</b> {'[발생 🔴] 상승 랠리 초기 신호' if sel_row['분석']['gc'] else '[대기] 이동평균선 정배열 준비중'} <br>
-        3️⃣ <b>데드크로스 위험:</b> {'[경고 🔵] 5일선 이탈 주의' if sel_row['분석']['dc'] else '[안전 🟢] 추세 깨짐 없음'} <br>
-        4️⃣ <b>전고점 돌파 분석:</b> 최근 60일 고점 {sel_row['고점']:,}원 돌파 시 추가 탄력 강력 예상 <br>
-        5️⃣ <b>상대적 강세 지수:</b> 시장 지수 대비 수익 방어력이 뛰어난 상대적 강세 패턴 유지 <br>
-        6️⃣ <b>기술적 반등 구간:</b> {'[진입 🔴] 바닥 지지선 확보' if sel_row['분석']['reb'] else '[돌파] 이미 지지선을 딛고 올라선 상태'} <br>
-        7️⃣ <b>투자자별 수급:</b> (가상 데이터) 외국인 12% 기관 25% 쌍끌이 매수세 예측 <br>
-        8️⃣ <b>이평선 밀집도:</b> 에너지가 크게 응축되어 곧 한 방향으로 급등락이 터질 전조 현상 <br>
-        9️⃣ <span class='highlight-positive'><b>회복 탄력성:</b> 전고점까지 남은 여력 <b>{exp_return}%</b>, 폭발적인 단기 수익 목표치 산정 완료</span>
+        {t1} <br> {t2} <br> {t3} <br> {t4} <br> {t5} <br> {t6} <br> {t7} <br> {t8} <br> {t9}
         </div>
         """, unsafe_allow_html=True)
         
     st.write("")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button(f"🚀 모의 매수하기", type="primary", use_container_width=True, key=f"buy_{actual_name}_{tab_key}"):
-            st.session_state.balance -= curr_price * 10
-            st.session_state.portfolio.append({"일시": datetime.now().strftime('%m-%d'), "종목명": actual_name, "단가": curr_price, "수량": 10})
+    is_in_fav = actual_name in st.session_state.favorites
+    if is_in_fav:
+        if st.button(f"❌ 관심종목 삭제", use_container_width=True, key=f"del_{actual_name}_{tab_key}"):
+            st.session_state.favorites.remove(actual_name)
             save_data() 
-            st.success(f"✅ 체결 완료!")
-            
-    with col2:
-        is_fav = actual_name in st.session_state.favorites
-        fav_btn_text = "⭐ 관심종목 해제" if is_fav else "⭐ 관심종목 추가"
-        if st.button(fav_btn_text, use_container_width=True, key=f"fav_{actual_name}_{tab_key}"):
-            if is_fav:
-                st.session_state.favorites.remove(actual_name)
-            else:
-                st.session_state.favorites.append(actual_name)
+            st.rerun() 
+    else:
+        if st.button(f"⭐ 관심종목 추가", use_container_width=True, key=f"add_{actual_name}_{tab_key}"):
+            st.session_state.favorites.append(actual_name)
             save_data() 
             st.rerun()
 
+# --- 앱 메인 화면 ---
 st.markdown("<h2 style='text-align: center; color: #d4af37; font-size: 22px;'>🌼잘살아보자🌼</h2>", unsafe_allow_html=True)
-st.markdown(f"<div class='gold-text'>💰 실시간 모의 자산: {st.session_state.balance:,} 원</div>", unsafe_allow_html=True)
 
-tab_search, tab_radar, tab_fav, tab_port = st.tabs(["🔍 검색", "📡 레이더", "⭐ 관심종목", "💼 보유"])
+tab_search, tab_radar, tab_fav = st.tabs(["🔍 검색", "📡 레이더", "⭐ 관심종목"])
 
 with tab_search:
     search_input = st.text_input("공부하고 싶은 종목명 (예: 삼성전자)", "")
-    
     if st.button("📈 이 종목 정밀 분석하기", use_container_width=True):
-        if search_input:
-            st.session_state.searched_stock = search_input
-        else:
-            st.warning("검색창에 종목명을 먼저 입력해줘!")
+        if search_input: st.session_state.searched_stock = search_input
+        else: st.warning("검색창에 종목명을 먼저 입력해줘!")
             
     if st.session_state.searched_stock:
         matched_df = all_stocks_df[all_stocks_df['Name'] == st.session_state.searched_stock]
         if not matched_df.empty:
-            target_code = matched_df.iloc[0]['Code']
-            target_name = matched_df.iloc[0]['Name']
+            target_code, target_name = matched_df.iloc[0]['Code'], matched_df.iloc[0]['Name']
             with st.spinner(f"'{target_name}' 분석 중..."):
                 result = get_stock_data({'코드': target_code, '종목명': target_name})
                 if result:
                     st.divider()
                     render_analysis(result, tab_key="search_tab") 
-                else:
-                    st.error("데이터가 부족하거나 상장 폐지/정지된 종목이야.")
-        else:
-            st.warning("종목 이름을 정확히 입력해줘!")
+                else: st.error("데이터가 부족하거나 상장 폐지/정지된 종목이야.")
+        else: st.warning("종목 이름을 정확히 입력해줘!")
 
-# [핵심 로직 수정] 전 종목 스캔 후 상위 30개 커트 로직 도입
 def run_scan(market_type):
-    with st.spinner("📡 [딥스캔 모드] 전 종목 정밀 탐색 중... (약 1~2분 정도 소요될 수 있어!)"):
-        df_list = fdr.StockListing(market_type) # .head(300) 삭제! 전 종목 싹 다 스캔!
-        
+    with st.spinner("📡 [딥스캔] 전 종목 탐색 중... (약 1~2분 소요)"):
+        df_list = fdr.StockListing(market_type)
         found = []
-        # 스레드를 늘려서 최대한 빠르게 1차 검사 진행
         with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
             futures = [executor.submit(check_vol, row) for row in df_list.itertuples()]
             for f in concurrent.futures.as_completed(futures):
                 res = f.result()
                 if res: found.append(res)
-                # 30개 제한 없앰! 터진 종목은 끝까지 다 찾는다.
-        
         new_results = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
             final_futures = [executor.submit(get_stock_data, item) for item in found]
             for f in concurrent.futures.as_completed(final_futures):
                 res = f.result()
                 if res: new_results.append(res)
-        
-        # 수익률이 가장 높은 '진짜 찐 대장주' 순으로 정렬하고 상위 30개만 자르기!
-        new_results = sorted(new_results, key=lambda x: x['수익%'], reverse=True)[:30]
-        st.session_state.rt_results = new_results
+        st.session_state.rt_results = sorted(new_results, key=lambda x: x['수익%'], reverse=True)[:30]
 
 with tab_radar:
     market = st.selectbox("스캔할 시장 선택", ["KOSPI", "KOSDAQ"])
-    if st.button("📡 오를 놈만 30개 스캔하기", type="secondary", use_container_width=True): 
-        run_scan(market)
-    
+    if st.button("📡 오를 놈만 30개 스캔하기", type="secondary", use_container_width=True): run_scan(market)
     if st.session_state.rt_results:
         df_res = pd.DataFrame(st.session_state.rt_results)
-        
-        if '신호' not in df_res.columns:
-            st.session_state.rt_results = []
-            st.warning("🔄 구조가 업데이트됐어! 스캔하기 버튼을 다시 한 번 눌러줘!")
-        else:
-            st.write("👇 전 종목 스캔 완료! 가장 폭발력이 강한 상위 30개야!")
-            display_cols = ['신호', '종목', '가격', '변동', '수익%']
-            styled_df = df_res[display_cols].style.apply(highlight_rows, axis=1)
-            
-            event = st.dataframe(
-                styled_df, 
-                use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row",
-                column_config={
-                    "신호": st.column_config.Column(width="small"),
-                    "종목": st.column_config.Column(width="small"),
-                    "가격": st.column_config.Column(width="small"),
-                    "변동": st.column_config.Column(width="small"),
-                    "수익%": st.column_config.Column(width="small"),
-                },
-                key="radar_dataframe"
-            )
-            
-            row_idx = event.selection.rows[0] if event.selection.rows else 0
-            sel_row = df_res.iloc[row_idx]
-            st.divider()
-            render_analysis(sel_row, tab_key="radar_tab") 
+        st.write("👇 빨간 배경은 강한 상승 예측 종목이야!")
+        display_cols = ['신호', '종목', '가격', '변동', '수익%']
+        styled_df = df_res[display_cols].style.apply(highlight_rows, axis=1)
+        event = st.dataframe(styled_df, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row", key="radar_dataframe")
+        row_idx = event.selection.rows[0] if event.selection.rows else 0
+        sel_row = df_res.iloc[row_idx]
+        st.divider()
+        render_analysis(sel_row, tab_key="radar_tab") 
 
 with tab_fav:
     if st.session_state.favorites:
         st.write("⭐ 내가 찜한 관심종목들의 실시간 상태야!")
-        if st.button("🔄 실시간 데이터 새로고침", use_container_width=True):
-            st.rerun()
-            
+        if st.button("🔄 실시간 데이터 새로고침", use_container_width=True): st.rerun()
         fav_results = []
-        with st.spinner("관심종목 데이터 불러오는 중..."):
+        with st.spinner("관심종목 데이터 로드 중..."):
             for fav_name in st.session_state.favorites:
                 matched = all_stocks_df[all_stocks_df['Name'] == fav_name]
                 if not matched.empty:
-                    target_code = matched.iloc[0]['Code']
-                    res = get_stock_data({'코드': target_code, '종목명': fav_name})
+                    res = get_stock_data({'코드': matched.iloc[0]['Code'], '종목명': fav_name})
                     if res: fav_results.append(res)
-                    
         if fav_results:
             df_fav = pd.DataFrame(fav_results)
-            display_cols = ['신호', '종목', '가격', '변동', '수익%']
-            styled_fav = df_fav[display_cols].style.apply(highlight_rows, axis=1)
-            
-            event_fav = st.dataframe(
-                styled_fav, 
-                use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row",
-                column_config={
-                    "신호": st.column_config.Column(width="small"),
-                    "종목": st.column_config.Column(width="small"),
-                    "가격": st.column_config.Column(width="small"),
-                    "변동": st.column_config.Column(width="small"),
-                    "수익%": st.column_config.Column(width="small"),
-                },
-                key="fav_dataframe"
-            )
-            
+            styled_fav = df_fav[['신호', '종목', '가격', '변동', '수익%']].style.apply(highlight_rows, axis=1)
+            event_fav = st.dataframe(styled_fav, use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row", key="fav_dataframe")
             row_idx_fav = event_fav.selection.rows[0] if event_fav.selection.rows else 0
-            sel_row_fav = df_fav.iloc[row_idx_fav]
-            st.divider()
-            render_analysis(sel_row_fav, tab_key="fav_tab") 
-    else:
-        st.info("아직 찜한 종목이 없어! 분석 리포트에서 '⭐ 관심종목 추가' 버튼을 눌러봐.")
-
-with tab_port:
-    if st.session_state.portfolio:
-        st.write("💼 현재 모의투자 보유 중인 종목입니다.")
-        st.dataframe(pd.DataFrame(st.session_state.portfolio), use_container_width=True)
-    else:
-        st.write("아직 매수한 종목이 없습니다.")
+            render_analysis(df_fav.iloc[row_idx_fav], tab_key="fav_tab") 
+    else: st.info("아직 찜한 종목이 없어! 분석 리포트에서 '⭐ 관심종목 추가' 버튼을 눌러봐.")
