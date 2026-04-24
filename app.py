@@ -4,7 +4,6 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import concurrent.futures
-import random
 import numpy as np
 import json
 import os
@@ -13,32 +12,28 @@ import os
 # 🚨 멀까~요? (비밀번호 시스템)
 # ==========================================
 def check_password():
-    """비밀번호가 맞으면 True를 반환하는 함수"""
     def password_entered():
-        # 👇 "쩡아천재123" 자리에 네가 원하는 비밀번호를 적어!
-        if st.session_state["password"] == "0012": 
+        if st.session_state["password"] == "6006": 
             st.session_state["password_correct"] = True
-            del st.session_state["password"]  # 비밀번호 저장 안 함 (보안)
+            del st.session_state["password"] 
         else:
             st.session_state["password_correct"] = False
 
     if "password_correct" not in st.session_state:
         st.markdown("<h2 style='text-align: center; color: #d4af37;'>🔒 JJ Trading Studio</h2>", unsafe_allow_html=True)
-        st.text_input("관리자 비밀번호를 입력하세요", type="password", on_change=password_entered, key="password")
+        st.text_input("나만의 비밀번호", type="password", on_change=password_entered, key="password")
         return False
     elif not st.session_state["password_correct"]:
         st.markdown("<h2 style='text-align: center; color: #d4af37;'>🔒 JJ Trading Studio</h2>", unsafe_allow_html=True)
-        st.text_input("관리자 비밀번호를 입력하세요", type="password", on_change=password_entered, key="password")
+        st.text_input("비밀번호를 입력해보시오", type="password", on_change=password_entered, key="password")
         st.error("😕 앗! 비밀번호가 틀렸어. 다시 입력해 봐!")
         return False
     return True
 
-# 만약 비밀번호가 틀렸다면? 아래 코드는 절대 실행 안 되고 여기서 화면 멈춤!
 if not check_password():
     st.stop()
 # ==========================================
 
-# (여기서부터 원래 있던 앱 설정 및 코드들이 시작되면 돼!)
 st.set_page_config(page_title="❤💛❤💛❤💛❤💛❤💛❤💛❤💛", layout="wide")
 
 st.markdown("""
@@ -127,12 +122,16 @@ def get_stock_data(item):
             formatted_change_clean = f"➖ 0원"
 
         curr = df['Close'].iloc[-1]
-        prev = df['Close'].iloc[-2]
         high_60 = df['High'].iloc[-60:].max()
         low_20 = df['Low'].iloc[-20:].min()
         
+        # [핵심 로직 수정] 진짜 상승 여력 계산! 가짜 난수 삭제!
         expected_ratio = round(((high_60 - curr) / curr) * 100, 1)
-        if expected_ratio < 5: expected_ratio = round(random.uniform(7.5, 15.2), 1)
+        
+        # 만약 전고점 돌파 중이라 상승여력이 0 이하라면, 최근 20일 변동폭을 기준으로 목표치 부여
+        if expected_ratio <= 0:
+            expected_ratio = round(((df['High'].max() - low_20) / curr) * 100 * 0.5, 1)
+            if expected_ratio <= 0: expected_ratio = 15.0 # 강한 신고가 돌파 종목은 기본 15% 세팅
         
         is_agg = curr > df['High'].iloc[-6:-1].max()
         signal_icon = "🔴" if is_agg else "🔵"
@@ -187,26 +186,24 @@ def render_analysis(sel_row, tab_key):
     if is_rise_signal:
         st.success(f"🎯 매도 시그널: 당일 이후 목표 매도 단가는 **{target_price:,}원** 부근으로 설정하세요.")
         
-df_chart = sel_row['데이터']
+    df_chart = sel_row['데이터']
     fig = go.Figure()
     fig.add_trace(go.Candlestick(x=df_chart.index, open=df_chart['Open'], high=df_chart['High'], low=df_chart['Low'], close=df_chart['Close'], name='캔들'))
     
     recent_low_idx = df_chart['Low'].iloc[-20:].idxmin()
     recent_low_val = df_chart['Low'].loc[recent_low_idx]
     
-    # 별표 사이즈도 폰에 맞춰 12~15 정도로 살짝 키워주면 더 잘 보여!
     fig.add_trace(go.Scatter(x=[recent_low_idx], y=[recent_low_val * 0.95], mode='markers', marker=dict(symbol='star', size=12, color='red'), name='최적 매수가'))
     fig.add_trace(go.Scatter(x=[df_chart.index[-1]], y=[target_price], mode='markers', marker=dict(symbol='star', size=12, color='blue'), name='예상 매도가'))
     
-    # --- 모바일 최적화 레이아웃 설정 ---
     fig.update_layout(
         template="plotly_dark", 
-        margin=dict(l=0, r=0, t=20, b=0), # 좌우 여백 0, 상단 여백 최소화
-        height=280, # 높이를 280으로 줄임 (폰에서 딱 적당해)
+        margin=dict(l=0, r=0, t=20, b=0),
+        height=280, 
         xaxis_rangeslider_visible=False,
-        showlegend=False, # 범례를 숨겨서 차트 영역을 넓힘
-        xaxis=dict(tickfont=dict(size=10)), # 날짜 글자 크기 축소
-        yaxis=dict(tickfont=dict(size=10))  # 가격 숫자 크기 축소
+        showlegend=False, 
+        xaxis=dict(tickfont=dict(size=10)), 
+        yaxis=dict(tickfont=dict(size=10))  
     )
     
     st.plotly_chart(fig, use_container_width=True, key=f"chart_{actual_name}_{tab_key}")
@@ -248,7 +245,6 @@ df_chart = sel_row['데이터']
             save_data() 
             st.rerun()
 
-# 기존 st.title("🌼잘살아보자🌼") 대신 이걸 넣어봐!
 st.markdown("<h2 style='text-align: center; color: #d4af37; font-size: 22px;'>🌼잘살아보자🌼</h2>", unsafe_allow_html=True)
 st.markdown(f"<div class='gold-text'>💰 실시간 모의 자산: {st.session_state.balance:,} 원</div>", unsafe_allow_html=True)
 
@@ -278,25 +274,29 @@ with tab_search:
         else:
             st.warning("종목 이름을 정확히 입력해줘!")
 
+# [핵심 로직 수정] 전 종목 스캔 후 상위 30개 커트 로직 도입
 def run_scan(market_type):
-    with st.spinner("📡 고속 레이더 가동 중..."):
-        df_list = fdr.StockListing(market_type).head(300)
+    with st.spinner("📡 [딥스캔 모드] 전 종목 정밀 탐색 중... (약 1~2분 정도 소요될 수 있어!)"):
+        df_list = fdr.StockListing(market_type) # .head(300) 삭제! 전 종목 싹 다 스캔!
+        
         found = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
+        # 스레드를 늘려서 최대한 빠르게 1차 검사 진행
+        with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
             futures = [executor.submit(check_vol, row) for row in df_list.itertuples()]
             for f in concurrent.futures.as_completed(futures):
                 res = f.result()
                 if res: found.append(res)
-                if len(found) >= 30: break
+                # 30개 제한 없앰! 터진 종목은 끝까지 다 찾는다.
         
         new_results = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
             final_futures = [executor.submit(get_stock_data, item) for item in found]
             for f in concurrent.futures.as_completed(final_futures):
                 res = f.result()
                 if res: new_results.append(res)
         
-        new_results = sorted(new_results, key=lambda x: x['수익%'], reverse=True)
+        # 수익률이 가장 높은 '진짜 찐 대장주' 순으로 정렬하고 상위 30개만 자르기!
+        new_results = sorted(new_results, key=lambda x: x['수익%'], reverse=True)[:30]
         st.session_state.rt_results = new_results
 
 with tab_radar:
@@ -311,11 +311,10 @@ with tab_radar:
             st.session_state.rt_results = []
             st.warning("🔄 구조가 업데이트됐어! 스캔하기 버튼을 다시 한 번 눌러줘!")
         else:
-            st.write("👇 빨간 배경은 강한 상승 예측 종목이야!")
+            st.write("👇 전 종목 스캔 완료! 가장 폭발력이 강한 상위 30개야!")
             display_cols = ['신호', '종목', '가격', '변동', '수익%']
             styled_df = df_res[display_cols].style.apply(highlight_rows, axis=1)
             
-            # [에러 수정] 레이더 탭 전용 이름표(Key) 달아주기
             event = st.dataframe(
                 styled_df, 
                 use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row",
@@ -354,7 +353,6 @@ with tab_fav:
             display_cols = ['신호', '종목', '가격', '변동', '수익%']
             styled_fav = df_fav[display_cols].style.apply(highlight_rows, axis=1)
             
-            # [에러 수정] 관심종목 탭 전용 이름표(Key)와 모바일 폭 다이어트 코드 추가!
             event_fav = st.dataframe(
                 styled_fav, 
                 use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row",
