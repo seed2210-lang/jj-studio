@@ -1,4 +1,4 @@
-package com.your.package.name // 이건 네 원래 코드 맨 윗줄에 있는 네 패키지 이름 그대로 둬야 해!
+package com.your.package.name 
 
 import android.os.Bundle
 import android.webkit.CookieManager
