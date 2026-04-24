@@ -36,9 +36,6 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# ---------------------------------------------------------
-# [핵심 업데이트] 앱이 꺼져도 기억하는 영구 저장(DB) 시스템
-# ---------------------------------------------------------
 DATA_FILE = "jj_user_data.json"
 
 def load_data():
@@ -65,7 +62,7 @@ if 'data_loaded' not in st.session_state:
     st.session_state.data_loaded = True
 
 if 'rt_results' not in st.session_state: st.session_state.rt_results = []
-if 'searched_stock' not in st.session_state: st.session_state.searched_stock = "" # 검색 기억장치
+if 'searched_stock' not in st.session_state: st.session_state.searched_stock = "" 
 
 @st.cache_data
 def load_all_stocks():
@@ -144,7 +141,6 @@ def highlight_rows(row):
         return ['background-color: rgba(255, 75, 75, 0.2)'] * len(row)
     return [''] * len(row)
 
-# [핵심 업데이트] tab_key를 추가해서 에러(DuplicateElementId) 완벽 차단!
 def render_analysis(sel_row, tab_key):
     actual_name = sel_row['순수종목명']
     st.markdown(f"### 📊 {actual_name} 정밀 분석 리포트")
@@ -173,7 +169,6 @@ def render_analysis(sel_row, tab_key):
     
     fig.update_layout(template="plotly_dark", margin=dict(l=10,r=10,t=30,b=10), height=350, xaxis_rangeslider_visible=False)
     
-    # [에러 수정] 차트에도 고유 꼬리표(key) 달아주기
     st.plotly_chart(fig, use_container_width=True, key=f"chart_{actual_name}_{tab_key}")
     
     st.markdown("#### 🔍 9대 핵심 지표 분석 결과")
@@ -199,7 +194,7 @@ def render_analysis(sel_row, tab_key):
         if st.button(f"🚀 모의 매수하기", type="primary", use_container_width=True, key=f"buy_{actual_name}_{tab_key}"):
             st.session_state.balance -= curr_price * 10
             st.session_state.portfolio.append({"일시": datetime.now().strftime('%m-%d'), "종목명": actual_name, "단가": curr_price, "수량": 10})
-            save_data() # 데이터 영구 저장
+            save_data() 
             st.success(f"✅ 체결 완료!")
             
     with col2:
@@ -210,7 +205,7 @@ def render_analysis(sel_row, tab_key):
                 st.session_state.favorites.remove(actual_name)
             else:
                 st.session_state.favorites.append(actual_name)
-            save_data() # 데이터 영구 저장
+            save_data() 
             st.rerun()
 
 st.title("📱 JJ Trading Studio Mobile Pro")
@@ -218,20 +213,15 @@ st.markdown(f"<div class='gold-text'>💰 실시간 모의 자산: {st.session_s
 
 tab_search, tab_radar, tab_fav, tab_port = st.tabs(["🔍 검색", "📡 레이더", "⭐ 관심종목", "💼 보유"])
 
-# ---------------------------------------------------------
-# [핵심 업데이트] 검색 탭 기억 상실증 해결!
-# ---------------------------------------------------------
 with tab_search:
     search_input = st.text_input("공부하고 싶은 종목명 (예: 삼성전자)", "")
     
-    # 버튼을 누르면 검색어를 기억장치에 저장
     if st.button("📈 이 종목 정밀 분석하기", use_container_width=True):
         if search_input:
             st.session_state.searched_stock = search_input
         else:
             st.warning("검색창에 종목명을 먼저 입력해줘!")
             
-    # 기억된 검색어가 있다면 화면을 새로고침해도 계속 분석 창 띄우기
     if st.session_state.searched_stock:
         matched_df = all_stocks_df[all_stocks_df['Name'] == st.session_state.searched_stock]
         if not matched_df.empty:
@@ -241,7 +231,7 @@ with tab_search:
                 result = get_stock_data({'코드': target_code, '종목명': target_name})
                 if result:
                     st.divider()
-                    render_analysis(result, tab_key="search_tab") # 검색 탭 전용 꼬리표
+                    render_analysis(result, tab_key="search_tab") 
                 else:
                     st.error("데이터가 부족하거나 상장 폐지/정지된 종목이야.")
         else:
@@ -284,6 +274,7 @@ with tab_radar:
             display_cols = ['신호', '종목', '가격', '변동', '수익%']
             styled_df = df_res[display_cols].style.apply(highlight_rows, axis=1)
             
+            # [에러 수정] 레이더 탭 전용 이름표(Key) 달아주기
             event = st.dataframe(
                 styled_df, 
                 use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row",
@@ -293,13 +284,14 @@ with tab_radar:
                     "가격": st.column_config.Column(width="small"),
                     "변동": st.column_config.Column(width="small"),
                     "수익%": st.column_config.Column(width="small"),
-                }
+                },
+                key="radar_dataframe"
             )
             
             row_idx = event.selection.rows[0] if event.selection.rows else 0
             sel_row = df_res.iloc[row_idx]
             st.divider()
-            render_analysis(sel_row, tab_key="radar_tab") # 레이더 탭 전용 꼬리표
+            render_analysis(sel_row, tab_key="radar_tab") 
 
 with tab_fav:
     if st.session_state.favorites:
@@ -321,15 +313,24 @@ with tab_fav:
             display_cols = ['신호', '종목', '가격', '변동', '수익%']
             styled_fav = df_fav[display_cols].style.apply(highlight_rows, axis=1)
             
+            # [에러 수정] 관심종목 탭 전용 이름표(Key)와 모바일 폭 다이어트 코드 추가!
             event_fav = st.dataframe(
                 styled_fav, 
-                use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row"
+                use_container_width=True, hide_index=True, on_select="rerun", selection_mode="single-row",
+                column_config={
+                    "신호": st.column_config.Column(width="small"),
+                    "종목": st.column_config.Column(width="small"),
+                    "가격": st.column_config.Column(width="small"),
+                    "변동": st.column_config.Column(width="small"),
+                    "수익%": st.column_config.Column(width="small"),
+                },
+                key="fav_dataframe"
             )
             
             row_idx_fav = event_fav.selection.rows[0] if event_fav.selection.rows else 0
             sel_row_fav = df_fav.iloc[row_idx_fav]
             st.divider()
-            render_analysis(sel_row_fav, tab_key="fav_tab") # 관심종목 탭 전용 꼬리표
+            render_analysis(sel_row_fav, tab_key="fav_tab") 
     else:
         st.info("아직 찜한 종목이 없어! 분석 리포트에서 '⭐ 관심종목 추가' 버튼을 눌러봐.")
 
