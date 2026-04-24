@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 import concurrent.futures
 import random
 import numpy as np
+import json
+import os
 
 st.set_page_config(page_title="JJ Trading Studio Mobile", layout="wide")
 
@@ -22,7 +24,6 @@ st.markdown("""
     .rise-text { color: #ff4b4b; font-weight: bold; }
     .fall-text { color: #4b8bff; font-weight: bold; }
     
-    /* 표 내부 패딩 최소화 및 폰트 축소로 폭 줄이기 */
     div.stDataFrame > div > div > table > thead > tr > th { font-size: 12px !important; padding: 2px 4px !important; }
     div.stDataFrame > div > div > table > tbody > tr > td { font-size: 12px !important; padding: 2px 4px !important; }
     
@@ -35,11 +36,36 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 세션 스테이트 초기화 (관심종목 추가)
+# ---------------------------------------------------------
+# [핵심 업데이트] 앱이 꺼져도 기억하는 영구 저장(DB) 시스템
+# ---------------------------------------------------------
+DATA_FILE = "jj_user_data.json"
+
+def load_data():
+    if os.path.exists(DATA_FILE):
+        try:
+            with open(DATA_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except: pass
+    return {"balance": 10000000, "portfolio": [], "favorites": []}
+
+def save_data():
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump({
+            "balance": st.session_state.balance,
+            "portfolio": st.session_state.portfolio,
+            "favorites": st.session_state.favorites
+        }, f, ensure_ascii=False)
+
+if 'data_loaded' not in st.session_state:
+    loaded = load_data()
+    st.session_state.balance = loaded["balance"]
+    st.session_state.portfolio = loaded["portfolio"]
+    st.session_state.favorites = loaded["favorites"]
+    st.session_state.data_loaded = True
+
 if 'rt_results' not in st.session_state: st.session_state.rt_results = []
-if 'balance' not in st.session_state: st.session_state.balance = 10000000 
-if 'portfolio' not in st.session_state: st.session_state.portfolio = []
-if 'favorites' not in st.session_state: st.session_state.favorites = [] # 즐겨찾기 리스트
+if 'searched_stock' not in st.session_state: st.session_state.searched_stock = "" # 검색 기억장치
 
 @st.cache_data
 def load_all_stocks():
@@ -66,7 +92,6 @@ def get_stock_data(item):
         df['변동폭'] = df['Close'] - df['Open']
         curr_change = int(df['변동폭'].iloc[-1])
         
-        # 완벽한 한국형 주식 색상 화살표 적용
         if curr_change > 0:
             formatted_change_clean = f"🔴 ▲ {abs(curr_change):,}원"
         elif curr_change < 0:
@@ -114,13 +139,13 @@ def get_stock_data(item):
         }
     except Exception as e: return None
 
-# 상승 종목 빨간색 배경 하이라이팅 함수
 def highlight_rows(row):
     if '상승' in row['신호']:
         return ['background-color: rgba(255, 75, 75, 0.2)'] * len(row)
     return [''] * len(row)
 
-def render_analysis(sel_row):
+# [핵심 업데이트] tab_key를 추가해서 에러(DuplicateElementId) 완벽 차단!
+def render_analysis(sel_row, tab_key):
     actual_name = sel_row['순수종목명']
     st.markdown(f"### 📊 {actual_name} 정밀 분석 리포트")
     
@@ -131,7 +156,6 @@ def render_analysis(sel_row):
     color_class = "rise-text" if is_rise_signal else "fall-text"
     
     st.markdown(f"<h3 class='{color_class}'>현재 시세: {curr_price:,}원 (목표 상승여력 +{exp_return}%)</h3>", unsafe_allow_html=True)
-    
     st.info(f"💡 **JJ AI 매매 전략:** {sel_row['매매전략']}")
     
     if is_rise_signal:
@@ -148,7 +172,9 @@ def render_analysis(sel_row):
     fig.add_trace(go.Scatter(x=[df_chart.index[-1]], y=[target_price], mode='markers', marker=dict(symbol='star', size=18, color='green'), name='예상 매도가'))
     
     fig.update_layout(template="plotly_dark", margin=dict(l=10,r=10,t=30,b=10), height=350, xaxis_rangeslider_visible=False)
-    st.plotly_chart(fig, use_container_width=True)
+    
+    # [에러 수정] 차트에도 고유 꼬리표(key) 달아주기
+    st.plotly_chart(fig, use_container_width=True, key=f"chart_{actual_name}_{tab_key}")
     
     st.markdown("#### 🔍 9대 핵심 지표 분석 결과")
     with st.container():
@@ -168,47 +194,58 @@ def render_analysis(sel_row):
         
     st.write("")
     
-    # 모의 매수 & 즐겨찾기 버튼 나란히 배치
     col1, col2 = st.columns(2)
     with col1:
-        if st.button(f"🚀 모의 매수하기", type="primary", use_container_width=True, key=f"buy_{actual_name}"):
+        if st.button(f"🚀 모의 매수하기", type="primary", use_container_width=True, key=f"buy_{actual_name}_{tab_key}"):
             st.session_state.balance -= curr_price * 10
             st.session_state.portfolio.append({"일시": datetime.now().strftime('%m-%d'), "종목명": actual_name, "단가": curr_price, "수량": 10})
+            save_data() # 데이터 영구 저장
             st.success(f"✅ 체결 완료!")
+            
     with col2:
         is_fav = actual_name in st.session_state.favorites
         fav_btn_text = "⭐ 관심종목 해제" if is_fav else "⭐ 관심종목 추가"
-        if st.button(fav_btn_text, use_container_width=True, key=f"fav_{actual_name}"):
+        if st.button(fav_btn_text, use_container_width=True, key=f"fav_{actual_name}_{tab_key}"):
             if is_fav:
                 st.session_state.favorites.remove(actual_name)
             else:
                 st.session_state.favorites.append(actual_name)
+            save_data() # 데이터 영구 저장
             st.rerun()
 
-st.title("📱 JJ Trading Studio Mobile Final")
+st.title("📱 JJ Trading Studio Mobile Pro")
 st.markdown(f"<div class='gold-text'>💰 실시간 모의 자산: {st.session_state.balance:,} 원</div>", unsafe_allow_html=True)
 
 tab_search, tab_radar, tab_fav, tab_port = st.tabs(["🔍 검색", "📡 레이더", "⭐ 관심종목", "💼 보유"])
 
+# ---------------------------------------------------------
+# [핵심 업데이트] 검색 탭 기억 상실증 해결!
+# ---------------------------------------------------------
 with tab_search:
     search_input = st.text_input("공부하고 싶은 종목명 (예: 삼성전자)", "")
+    
+    # 버튼을 누르면 검색어를 기억장치에 저장
     if st.button("📈 이 종목 정밀 분석하기", use_container_width=True):
         if search_input:
-            matched_df = all_stocks_df[all_stocks_df['Name'] == search_input]
-            if not matched_df.empty:
-                target_code = matched_df.iloc[0]['Code']
-                target_name = matched_df.iloc[0]['Name']
-                with st.spinner(f"'{target_name}' 분석 중..."):
-                    result = get_stock_data({'코드': target_code, '종목명': target_name})
-                    if result:
-                        st.divider()
-                        render_analysis(result)
-                    else:
-                        st.error("데이터가 부족하거나 상장 폐지/정지된 종목이야.")
-            else:
-                st.warning("종목 이름을 정확히 입력해줘!")
+            st.session_state.searched_stock = search_input
         else:
             st.warning("검색창에 종목명을 먼저 입력해줘!")
+            
+    # 기억된 검색어가 있다면 화면을 새로고침해도 계속 분석 창 띄우기
+    if st.session_state.searched_stock:
+        matched_df = all_stocks_df[all_stocks_df['Name'] == st.session_state.searched_stock]
+        if not matched_df.empty:
+            target_code = matched_df.iloc[0]['Code']
+            target_name = matched_df.iloc[0]['Name']
+            with st.spinner(f"'{target_name}' 분석 중..."):
+                result = get_stock_data({'코드': target_code, '종목명': target_name})
+                if result:
+                    st.divider()
+                    render_analysis(result, tab_key="search_tab") # 검색 탭 전용 꼬리표
+                else:
+                    st.error("데이터가 부족하거나 상장 폐지/정지된 종목이야.")
+        else:
+            st.warning("종목 이름을 정확히 입력해줘!")
 
 def run_scan(market_type):
     with st.spinner("📡 고속 레이더 가동 중..."):
@@ -244,7 +281,6 @@ with tab_radar:
             st.warning("🔄 구조가 업데이트됐어! 스캔하기 버튼을 다시 한 번 눌러줘!")
         else:
             st.write("👇 빨간 배경은 강한 상승 예측 종목이야!")
-            
             display_cols = ['신호', '종목', '가격', '변동', '수익%']
             styled_df = df_res[display_cols].style.apply(highlight_rows, axis=1)
             
@@ -263,7 +299,7 @@ with tab_radar:
             row_idx = event.selection.rows[0] if event.selection.rows else 0
             sel_row = df_res.iloc[row_idx]
             st.divider()
-            render_analysis(sel_row)
+            render_analysis(sel_row, tab_key="radar_tab") # 레이더 탭 전용 꼬리표
 
 with tab_fav:
     if st.session_state.favorites:
@@ -293,7 +329,7 @@ with tab_fav:
             row_idx_fav = event_fav.selection.rows[0] if event_fav.selection.rows else 0
             sel_row_fav = df_fav.iloc[row_idx_fav]
             st.divider()
-            render_analysis(sel_row_fav)
+            render_analysis(sel_row_fav, tab_key="fav_tab") # 관심종목 탭 전용 꼬리표
     else:
         st.info("아직 찜한 종목이 없어! 분석 리포트에서 '⭐ 관심종목 추가' 버튼을 눌러봐.")
 
