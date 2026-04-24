@@ -25,11 +25,11 @@ def check_password():
 
     if "password_correct" not in st.session_state:
         st.markdown("<h2 style='text-align: center; color: #d4af37;'>🔒 🌼오늘도쨔잔!!🌼</h2>", unsafe_allow_html=True)
-        st.text_input("관리자 비밀번호를 입력하세요", type="password", on_change=password_entered, key="password")
+        st.text_input("많이먹어보자", type="password", on_change=password_entered, key="password")
         return False
     elif not st.session_state["password_correct"]:
         st.markdown("<h2 style='text-align: center; color: #d4af37;'>🔒 🌼오늘도쨔잔!!🌼</h2>", unsafe_allow_html=True)
-        st.text_input("관리자 비밀번호를 입력하세요", type="password", on_change=password_entered, key="password")
+        st.text_input("비밀번호는내보물", type="password", on_change=password_entered, key="password")
         st.error("😕땡!")
         return False
     return True
