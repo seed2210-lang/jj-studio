@@ -1,14 +1,34 @@
-import streamlit as st
-import FinanceDataReader as fdr
-import pandas as pd
-import plotly.graph_objects as go
-from datetime import datetime, timedelta
-import concurrent.futures
-import random
-import numpy as np
+package com.your.package.name // 이건 네 원래 코드 맨 윗줄에 있는 네 패키지 이름 그대로 둬야 해!
 
-st.set_page_config(page_title="JJ Trading Studio Mobile", layout="wide")
+import android.os.Bundle
+import android.webkit.CookieManager
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.appcompat.app.AppCompatActivity
 
+class MainActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        val webView: WebView = findViewById(R.id.webView)
+
+        // 1. 스트림릿이 정상 작동하도록 자바스크립트 허용
+        webView.settings.javaScriptEnabled = true
+        
+        // 2. 로그인이나 내 세션 정보를 까먹지 않도록 '기억력' 켜주기 (이게 핵심!)
+        webView.settings.domStorageEnabled = true
+        val cookieManager = CookieManager.getInstance()
+        cookieManager.setAcceptCookie(true)
+        cookieManager.setAcceptThirdPartyCookies(webView, true)
+
+        // 3. 새 창이나 인터넷 어플(크롬 등)이 따로 열리지 않고 내 앱 안에서만 돌게 만들기
+        webView.webViewClient = WebViewClient()
+
+        // 4. 대망의 쩡아 스튜디오 연결!
+        webView.loadUrl("https://jj-studio.streamlit.app")
+    }
+}
 st.markdown("""
     <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
