@@ -39,7 +39,7 @@ if not check_password():
     st.stop()
 
 # --- 앱 기본 설정 ---
-st.set_page_config(page_title="🌼 잘살아보자 🌼", layout="wide")
+st.set_page_config(page_title="🌼🌼🌼🌼🌼🌼🌼🌼🌼🌼🌼🌼🌼🌼", layout="wide")
 
 # CSS: 모바일 최적화 및 스타일링
 st.markdown("""
@@ -242,7 +242,7 @@ def render_analysis(sel_row, tab_key):
                 st.session_state.favorites.append(actual_name); save_data(); st.rerun()
 
 # --- 앱 UI 시작 ---
-st.markdown("<h2 style='text-align: center; color: #d4af37; font-size: 22px;'>🌼웃으면서잠들자🌼</h2>", unsafe_allow_html=True)
+st.markdown("<h2 style='text-align: center; color: #d4af37; font-size: 22px;'>🌼잘될꺼라니까무조건🌼</h2>", unsafe_allow_html=True)
 
 tab_search, tab_radar, tab_fav = st.tabs(["🔍 검색", "📡 레이더", "⭐ 관심종목"])
 
@@ -279,7 +279,7 @@ def run_scan(market_type):
 
 with tab_radar:
     market = st.selectbox("시장 선택", ["KOSPI", "KOSDAQ"])
-    if st.button("📡 오를 놈만 30개 스캔하기", type="secondary", use_container_width=True): 
+    if st.button("📡 오늘의 내스끼를 찾아보자", type="secondary", use_container_width=True): 
         run_scan(market)
     
     if st.session_state.rt_results:
