@@ -9,7 +9,37 @@ import numpy as np
 import json
 import os
 
-st.set_page_config(page_title="JJ Trading Studio Mobile", layout="wide")
+# ==========================================
+# 🚨 JJ 스튜디오 전용 도어락 (비밀번호 시스템)
+# ==========================================
+def check_password():
+    """비밀번호가 맞으면 True를 반환하는 함수"""
+    def password_entered():
+        # 👇 "쩡아천재123" 자리에 네가 원하는 비밀번호를 적어!
+        if st.session_state["password"] == "0012": 
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]  # 비밀번호 저장 안 함 (보안)
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        st.markdown("<h2 style='text-align: center; color: #d4af37;'>🔒 JJ Trading Studio</h2>", unsafe_allow_html=True)
+        st.text_input("관리자 비밀번호를 입력하세요", type="password", on_change=password_entered, key="password")
+        return False
+    elif not st.session_state["password_correct"]:
+        st.markdown("<h2 style='text-align: center; color: #d4af37;'>🔒 JJ Trading Studio</h2>", unsafe_allow_html=True)
+        st.text_input("관리자 비밀번호를 입력하세요", type="password", on_change=password_entered, key="password")
+        st.error("😕 앗! 비밀번호가 틀렸어. 다시 입력해 봐!")
+        return False
+    return True
+
+# 만약 비밀번호가 틀렸다면? 아래 코드는 절대 실행 안 되고 여기서 화면 멈춤!
+if not check_password():
+    st.stop()
+# ==========================================
+
+# (여기서부터 원래 있던 앱 설정 및 코드들이 시작되면 돼!)
+st.set_page_config(page_title="🌼냠냠해보자🌼", layout="wide")
 
 st.markdown("""
     <style>
