@@ -1,34 +1,14 @@
-package com.your.package.name 
+import streamlit as st
+import FinanceDataReader as fdr
+import pandas as pd
+import plotly.graph_objects as go
+from datetime import datetime, timedelta
+import concurrent.futures
+import random
+import numpy as np
 
-import android.os.Bundle
-import android.webkit.CookieManager
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import androidx.appcompat.app.AppCompatActivity
+st.set_page_config(page_title="JJ Trading Studio Mobile", layout="wide")
 
-class MainActivity : AppCompatActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-
-        val webView: WebView = findViewById(R.id.webView)
-
-        // 1. 스트림릿이 정상 작동하도록 자바스크립트 허용
-        webView.settings.javaScriptEnabled = true
-        
-        // 2. 로그인이나 내 세션 정보를 까먹지 않도록 '기억력' 켜주기 (이게 핵심!)
-        webView.settings.domStorageEnabled = true
-        val cookieManager = CookieManager.getInstance()
-        cookieManager.setAcceptCookie(true)
-        cookieManager.setAcceptThirdPartyCookies(webView, true)
-
-        // 3. 새 창이나 인터넷 어플(크롬 등)이 따로 열리지 않고 내 앱 안에서만 돌게 만들기
-        webView.webViewClient = WebViewClient()
-
-        // 4. 대망의 쩡아 스튜디오 연결!
-        webView.loadUrl("https://jj-studio.streamlit.app")
-    }
-}
 st.markdown("""
     <style>
     @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
@@ -86,7 +66,7 @@ def get_stock_data(item):
         df['변동폭'] = df['Close'] - df['Open']
         curr_change = int(df['변동폭'].iloc[-1])
         
-        # [수정] 완벽한 한국형 주식 색상 화살표 적용
+        # 완벽한 한국형 주식 색상 화살표 적용
         if curr_change > 0:
             formatted_change_clean = f"🔴 ▲ {abs(curr_change):,}원"
         elif curr_change < 0:
@@ -117,7 +97,6 @@ def get_stock_data(item):
         dead_cross = (df['MA5'].iloc[-1] < df['MA20'].iloc[-1]) and (df['MA5'].iloc[-2] >= df['MA20'].iloc[-2])
         rebound_zone = curr <= low_20 * 1.05
         
-        # [수정] 모바일 화면 폭 축소를 위해 딕셔너리 키(컬럼명)를 짧게 변경
         return {
             "신호": signal_text, 
             "종목": item['종목명'], 
@@ -189,7 +168,7 @@ def render_analysis(sel_row):
         
     st.write("")
     
-    # [추가] 모의 매수 & 즐겨찾기 버튼 나란히 배치
+    # 모의 매수 & 즐겨찾기 버튼 나란히 배치
     col1, col2 = st.columns(2)
     with col1:
         if st.button(f"🚀 모의 매수하기", type="primary", use_container_width=True, key=f"buy_{actual_name}"):
@@ -209,7 +188,6 @@ def render_analysis(sel_row):
 st.title("📱 JJ Trading Studio Mobile Final")
 st.markdown(f"<div class='gold-text'>💰 실시간 모의 자산: {st.session_state.balance:,} 원</div>", unsafe_allow_html=True)
 
-# 탭 이름을 짧게 변경하여 모바일 가독성 업
 tab_search, tab_radar, tab_fav, tab_port = st.tabs(["🔍 검색", "📡 레이더", "⭐ 관심종목", "💼 보유"])
 
 with tab_search:
@@ -267,7 +245,6 @@ with tab_radar:
         else:
             st.write("👇 빨간 배경은 강한 상승 예측 종목이야!")
             
-            # [추가] Pandas Styler를 적용하여 상승 종목 빨간색 배경칠하기
             display_cols = ['신호', '종목', '가격', '변동', '수익%']
             styled_df = df_res[display_cols].style.apply(highlight_rows, axis=1)
             
@@ -288,7 +265,6 @@ with tab_radar:
             st.divider()
             render_analysis(sel_row)
 
-# [추가] 즐겨찾기 탭 로직
 with tab_fav:
     if st.session_state.favorites:
         st.write("⭐ 내가 찜한 관심종목들의 실시간 상태야!")
