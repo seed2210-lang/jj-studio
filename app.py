@@ -189,7 +189,7 @@ def render_analysis(sel, tab_key):
         save_data(); st.rerun()
 
 # --- 메인 화면 ---
-st.markdown("<h2 style='text-align: center; color: #d4af37;'>🌼무조건잘된다니까🌼</h2>", unsafe_allow_html=True)
+st.markdown("<h3 style='text-align: center; color: #d4af37;'>🌼무조건잘된다니까🌼</h3>", unsafe_allow_html=True)
 t1, t2, t3 = st.tabs(["🔍 종목 검색", "📡 SS등급 레이더", "⭐ 나의 보물함"])
 
 with t1:
