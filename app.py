@@ -18,7 +18,7 @@ def check_password():
         else:
             st.session_state["password_correct"] = False
     if "password_correct" not in st.session_state:
-        st.markdown("<h4 style='text-align: center; color: #d4af37;'> ☂오늘도쨔잔!!☂</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 style='text-align: center; color: #d4af37;'> 🍀오늘도쨔잔!!☘</h4>", unsafe_allow_html=True)
         st.text_input("헤헿💛", type="password", on_change=password_entered, key="password")
         return False
     return True
@@ -79,7 +79,7 @@ def quick_filter(item):
 # --- [개선] 2단계 정밀 분석 엔진 ---
 def analyze_logic(item):
     try:
-        df = fdr.DataReader(item['코드'], (datetime.now() - timedelta(days=220)).strftime('%Y-%m-%d'))
+        df = fdr.DataReader(item['코드'], (datetime.now() - timedelta(days=120)).strftime('%Y-%m-%d'))
         if len(df) < 100: return None
         
         close = df['Close']
@@ -140,7 +140,7 @@ def render_compact(res, key):
     st.divider()
 
 # --- 앱 본체 ---
-st.markdown("<h4 style='text-align: center; color: #d4af37;'>🌼무조건잘된다니까🌼</h4>", unsafe_allow_html=True)
+st.markdown("<h4 style='text-align: center; color: #d4af37;'>🌷무조건잘된다니까🌷</h4>", unsafe_allow_html=True)
 t1, t2, t3 = st.tabs(["🔍검색", "📡SS레이더", "⭐보물함"])
 
 with t1:
