@@ -18,7 +18,7 @@ def check_password():
         else:
             st.session_state["password_correct"] = False
     if "password_correct" not in st.session_state:
-        st.markdown("<h4 style='text-align: center; color: #d4af37;'> 🍀오늘도쨔잔!!☘</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 style='text-align: center; color: #d4af37;'> 🍀오늘도쨔잔!!🍀</h4>", unsafe_allow_html=True)
         st.text_input("헤헿💛", type="password", on_change=password_entered, key="password")
         return False
     return True
