@@ -59,52 +59,56 @@ if 'data_loaded' not in st.session_state:
 if 'rt_results' not in st.session_state: st.session_state.rt_results = []
 if 'searched_stock' not in st.session_state: st.session_state.searched_stock = "" 
 
+# [초고속 필터] 시가총액 상위 종목만 가져오기
 @st.cache_data(ttl=3600)
-def load_all_stocks():
-    try: return fdr.StockListing('KRX')
-    except: return pd.DataFrame({'Code': ['005930'], 'Name': ['삼성전자']})
-all_stocks_df = load_all_stocks()
-
-# --- [개선] 가벼운 1단계 필터링 (최근 10일만 체크) ---
-def quick_filter(item):
+def load_active_stocks():
     try:
-        df = fdr.DataReader(item['코드'], (datetime.now() - timedelta(days=15)).strftime('%Y-%m-%d'))
-        if len(df) < 5: return None
-        # 최근 거래량이 평균보다 터졌거나 양봉인 것들만 1차 합격
-        if df['Volume'].iloc[-1] > df['Volume'].iloc[:-1].mean() * 1.2 or df['Close'].iloc[-1] > df['Open'].iloc[-1]:
-            return item
-    except: return None
-    return None
+        df = fdr.StockListing('KRX')
+        # 시가총액(Marcap) 기준으로 내림차순 정렬 후 상위 1,200개만 남김 (잡주 제거)
+        active_df = df.sort_values(by='Marcap', ascending=False).head(1200)
+        return active_df
+    except:
+        return pd.DataFrame({'Code': ['005930'], 'Name': ['삼성전자']})
 
-# --- [개선] 2단계 정밀 분석 엔진 ---
+all_stocks_df = load_active_stocks()
+
+# --- 정밀 분석 엔진 (120일 기점) ---
 def analyze_logic(item):
     try:
+        # 분석 기간을 120일로 최적화
         df = fdr.DataReader(item['코드'], (datetime.now() - timedelta(days=120)).strftime('%Y-%m-%d'))
-        if len(df) < 100: return None
+        if len(df) < 60: return None # 최소 60일 데이터 필요
         
         close = df['Close']
         ma5 = close.rolling(5).mean(); ma20 = close.rolling(20).mean(); ma60 = close.rolling(60).mean()
+        
+        # RSI 
         delta = close.diff(); gain = (delta.where(delta > 0, 0)).rolling(14).mean(); loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
         rsi = 100 - (100 / (1 + (gain/(loss+1e-9))))
+        
+        # OBV
         obv = (np.sign(close.diff()) * df['Volume']).fillna(0).cumsum()
         
         curr, high_60, low_20 = close.iloc[-1], df['High'].iloc[-60:].max(), df['Low'].iloc[-20:].min()
         support = round(ma20.iloc[-1] if curr > ma20.iloc[-1] else ma60.iloc[-1], 0)
-        buy_min, buy_max, target_exit, stop_loss = round(support * 0.99, 0), round(support * 1.02, 0), round(high_60, 0), round(support * 0.96, 0)
+        buy_min, buy_max = round(support * 0.99, 0), round(support * 1.02, 0)
+        target_exit = round(high_60, 0)
+        stop_loss = round(support * 0.96, 0)
         
+        # 12대 블랙박스 지표
         scores = [
-            df['Volume'].iloc[-1] > df['Volume'].iloc[-5:-1].mean()*1.3,
-            ma5.iloc[-1] > ma20.iloc[-1],
-            curr > df['Open'].iloc[-1],
-            curr > df['High'].iloc[-10:-1].max(),
-            30 < rsi.iloc[-1] < 70,
-            curr <= low_20 * 1.15,
-            (df['High'].iloc[-20:].max() - df['Low'].iloc[-20:].min())/curr < 0.1, # 에너지응축
-            obv.iloc[-1] > obv.iloc[-5],
-            (rsi.iloc[-1] > rsi.iloc[-5]) and (curr < close.iloc[-5]),
-            curr > ma20.iloc[-1],
-            ((high_60 - curr)/curr*100) >= 15,
-            ma20.iloc[-1] > ma20.iloc[-10]
+            df['Volume'].iloc[-1] > df['Volume'].iloc[-5:-1].mean()*1.3, # 1.거래량폭발
+            ma5.iloc[-1] > ma20.iloc[-1], # 2.골든크로스
+            curr > df['Open'].iloc[-1], # 3.단기양봉
+            curr > df['High'].iloc[-10:-1].max(), # 4.전고돌파
+            30 < rsi.iloc[-1] < 70, # 5.RSI안전권
+            curr <= low_20 * 1.15, # 6.바닥지지
+            (df['High'].iloc[-20:].max() - df['Low'].iloc[-20:].min())/curr < 0.1, # 7.에너지응축
+            obv.iloc[-1] > obv.iloc[-5], # 8.수급우향
+            (rsi.iloc[-1] > rsi.iloc[-5]) and (curr < close.iloc[-5]), # 9.매집신호(다이버전스)
+            curr > ma20.iloc[-1], # 10.중심선위
+            ((high_60 - curr)/curr*100) >= 15, # 11.탄력성
+            ma20.iloc[-1] > ma20.iloc[-10] # 12.추세안정
         ]
         total_score = sum(scores)
         is_buy_zone = buy_min <= curr <= buy_max
@@ -157,27 +161,19 @@ with t1:
 with t2:
     if st.button("📡 [터보 스캔] SS등급 추출", use_container_width=True):
         try:
-            # 1단계: 번개 스캔 (후보 찾기)
-            all_l = fdr.StockListing('KRX')
-            p_bar = st.progress(0, text="📡 1단계: 후보 종목 필터링 중...")
-            candidates = []
-            with concurrent.futures.ThreadPoolExecutor(max_workers=30) as ex:
-                futures = [ex.submit(quick_filter, {'코드': r.Code, '종목명': r.Name}) for r in all_l.itertuples()]
-                for i, f in enumerate(concurrent.futures.as_completed(futures)):
-                    res = f.result()
-                    if res: candidates.append(res)
-                    if i % 100 == 0: p_bar.progress(i/len(all_l), text=f"📡 1단계: {len(candidates)}개 후보 포착")
-            
-            # 2단계: 정밀 분석 (SS등급 추출)
-            p_bar.progress(0, text="💎 2단계: 후보 종목 정밀 분석 중...")
+            # 1,200개 상위 종목만 타겟으로 삼아 속도 2배 이상 향상
+            p_bar = st.progress(0, text="📡 우량 종목 스캔 중...")
             final = []
+            # 병렬 일꾼 수를 20개로 최적화 (서버 차단 방지)
             with concurrent.futures.ThreadPoolExecutor(max_workers=20) as ex:
-                futures = [ex.submit(analyze_logic, item) for item in candidates]
+                futures = [ex.submit(analyze_logic, {'코드': r.Code, '종목명': r.Name}) for r in all_stocks_df.itertuples()]
                 for i, f in enumerate(concurrent.futures.as_completed(futures)):
                     res = f.result()
                     if res: final.append(res)
-                    p_bar.progress((i+1)/len(candidates), text=f"💎 2단계: {i+1}/{len(candidates)} 완료")
+                    if i % 20 == 0:
+                        p_bar.progress((i+1)/len(all_stocks_df), text=f"💎 {i+1}/{len(all_stocks_df)} 종목 분석 완료...")
             
+            # 등급 -> 점수 -> 수익률 순으로 정렬하여 상위 30개만 표시
             st.session_state.rt_results = sorted(final, key=lambda x: (x['등급'], x['점수'], x['수익%']), reverse=True)[:30]
             p_bar.empty()
         except: st.error("거래소 서버 지연! 잠시 후 다시 해봐.")
@@ -189,7 +185,7 @@ with t3:
     if st.session_state.favorites:
         if st.button("🔄 보물함 새로고침", use_container_width=True): st.rerun()
         fav_l = []
-        with st.spinner("보물함 분석 중..."):
+        with st.spinner("보물함 정밀 분석 중..."):
             for fn in st.session_state.favorites:
                 m = all_stocks_df[all_stocks_df['Name'] == fn]
                 if not m.empty:
