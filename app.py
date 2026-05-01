@@ -40,7 +40,11 @@ st.markdown("""
     .indicator-grid { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
     .ind-item { padding: 2px 8px; border-radius: 15px; font-size: 10px; font-weight: bold; border: 1px solid #444; }
     .ss-badge { color: #ff4b4b; border: 1.5px solid #ff4b4b; padding: 1px 6px; border-radius: 5px; font-weight: 900; font-size: 14px; }
-    .curr-price { color: #ffffff; font-size: 18px; font-weight: bold; margin-left: 10px; }
+    .predict-box { background: rgba(212, 175, 55, 0.1); border: 1px solid #d4af37; padding: 8px; border-radius: 8px; margin-top: 5px; font-size: 12px; color: #d4af37; text-align: center; }
+    /* 가이드 테이블 스타일 */
+    .guide-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; margin-bottom: 20px; border: 1px solid #30363d; }
+    .guide-table th { background-color: #1c2128; color: #777; padding: 8px; border: 1px solid #30363d; }
+    .guide-table td { padding: 8px; border: 1px solid #30363d; text-align: center; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -66,18 +70,17 @@ def load_active_stocks():
     try:
         df = fdr.StockListing('KRX')
         df['Name'] = df['Name'].str.strip()
-        active_df = df.sort_values(by='Marcap', ascending=False).head(1200)
-        return active_df
+        return df.sort_values(by='Marcap', ascending=False).head(1200)
     except:
         return pd.DataFrame({'Code': ['005930'], 'Name': ['삼성전자']})
 
 all_stocks_df = load_active_stocks()
 
-# --- 정밀 분석 엔진 (120일 기점) ---
+# --- 정밀 분석 & 예측 엔진 ---
 def analyze_logic(item):
     try:
-        # 타임아웃을 짧게 걸어 무한 로딩 방지
-        df = fdr.DataReader(item['코드'], (datetime.now() - timedelta(days=120)).strftime('%Y-%m-%d'))
+        end_date = datetime.now().strftime('%Y-%m-%d')
+        df = fdr.DataReader(item['코드'], (datetime.now() - timedelta(days=150)).strftime('%Y-%m-%d'), end_date)
         if df is None or len(df) < 60: return None
         
         close = df['Close']
@@ -91,19 +94,18 @@ def analyze_logic(item):
         buy_min, buy_max = round(support * 0.99, 0), round(support * 1.02, 0)
         target_exit, stop_loss = round(high_60, 0), round(support * 0.96, 0)
         
+        exp_yield = round(((target_exit - curr) / curr) * 100, 1)
+        daily_vol = df['Close'].pct_change().std() * 100
+        days_to_target = int(abs(exp_yield) / (daily_vol + 0.5)) + 3
+        predict_period = f"약 {days_to_target-2}~{days_to_target+5}일 이내" if exp_yield > 0 else "추세 확인 필요"
+
         scores = [
             df['Volume'].iloc[-1] > df['Volume'].iloc[-5:-1].mean()*1.3,
-            ma5.iloc[-1] > ma20.iloc[-1],
-            curr > df['Open'].iloc[-1],
-            curr > df['High'].iloc[-10:-1].max(),
-            30 < rsi.iloc[-1] < 70,
-            curr <= low_20 * 1.15,
-            (df['High'].iloc[-20:].max() - df['Low'].iloc[-20:].min())/curr < 0.1,
-            obv.iloc[-1] > obv.iloc[-5],
-            (rsi.iloc[-1] > rsi.iloc[-5]) and (curr < close.iloc[-5]),
-            curr > ma20.iloc[-1],
-            ((high_60 - curr)/curr*100) >= 15,
-            ma20.iloc[-1] > ma20.iloc[-10]
+            ma5.iloc[-1] > ma20.iloc[-1], curr > df['Open'].iloc[-1],
+            curr > df['High'].iloc[-10:-1].max(), 30 < rsi.iloc[-1] < 70,
+            curr <= low_20 * 1.15, (df['High'].iloc[-20:].max() - df['Low'].iloc[-20:].min())/curr < 0.1,
+            obv.iloc[-1] > obv.iloc[-5], (rsi.iloc[-1] > rsi.iloc[-5]) and (curr < close.iloc[-5]),
+            curr > ma20.iloc[-1], exp_yield >= 10, ma20.iloc[-1] > ma20.iloc[-10]
         ]
         total_score = sum(scores)
         is_buy_zone = buy_min <= curr <= buy_max
@@ -111,25 +113,23 @@ def analyze_logic(item):
 
         return {
             "등급": tier, "종목": item['종목명'], "코드": item['코드'], "가격": int(curr),
-            "수익%": round(((high_60 - curr) / curr) * 100, 1),
+            "수익률": exp_yield, "기간": predict_period,
             "진입가": f"{int(buy_min):,}", "목표가": f"{int(target_exit):,}", "손절가": f"{int(stop_loss):,}",
-            "점수": total_score, "지표": scores, "상태": "🎯진입가능" if is_buy_zone else "⏳대기"
+            "점수": total_score, "지표": scores, "상태": "✔매수가능" if is_buy_zone else "⏳대기"
         }
     except: return None
 
-# --- 한 화면에 쏙 들어오는 콤팩트 렌더링 ---
+# --- UI 렌더링 ---
 def render_compact(res, key):
-    # 타이틀: 등급 + 종목명 + 현재 시세
     st.markdown(f"""
         <div style='display: flex; align-items: center; margin-bottom: 5px;'>
             <span class='ss-badge'>{res['등급']}</span>
-            <span style='font-size: 18px; font-weight: bold; margin-left: 8px;'>{res['종목']}</span>
-            <span class='curr-price'>{res['가격']:,}원</span>
-            <span style='font-size: 12px; color: #777; margin-left: auto;'>{res['상태']}</span>
+            <span style='font-size: 16px; font-weight: bold; margin-left: 8px;'>{res['종목']}</span>
+            <span style='color: #ffffff; font-size: 16px; font-weight: bold; margin-left: 10px;'>{res['가격']:,}원</span>
+            <span style='font-size: 11px; color: #777; margin-left: auto;'>{res['상태']}</span>
         </div>
     """, unsafe_allow_html=True)
     
-    # 가로 3단 가격 배치
     st.markdown(f"""
         <div class='price-container'>
             <div class='price-card'><small style='color:#777'>진입가</small><br><b style='color:#ff4b4b'>{res['진입가']}</b></div>
@@ -138,7 +138,12 @@ def render_compact(res, key):
         </div>
     """, unsafe_allow_html=True)
 
-    # 12대 지표 그리드
+    st.markdown(f"""
+        <div class='predict-box'>
+            🚀 <b>예상 수익률: {res['수익률']}%</b> | 📅 <b>예상 상승 기간: {res['기간']}</b>
+        </div>
+    """, unsafe_allow_html=True)
+
     names = ["거래량", "골든C", "양봉", "전고돌파", "RSI안전", "바닥지지", "응축", "수급우향", "매집신호", "중심선위", "탄력성", "추세안정"]
     indicators_html = "".join([f"<span class='ind-item' style='background:{'rgba(255,75,75,0.15)' if val else 'transparent'}; border-color:{'#ff4b4b' if val else '#444'}; color:{'#ff4b4b' if val else '#777'}'>{name}</span>" for name, val in zip(names, res['지표'])])
     st.markdown(f"<div class='analysis-box'><div class='indicator-grid'>{indicators_html}</div></div>", unsafe_allow_html=True)
@@ -157,33 +162,37 @@ with t1:
     s_in = st.text_input("종목명 입력", "")
     if st.button("즉시 분석", use_container_width=True):
         st.session_state.searched_stock = s_in.strip()
+    
+    # [쩡아 요청] 기계적 매수 순위 가이드 테이블
+    st.markdown("""
+        <table class='guide-table'>
+            <tr><th>순위</th><th>등급</th><th>상태</th><th>핵심 포인트</th><th>액션 계획</th></tr>
+            <tr><td>🥇 <b>1위</b></td><td style='color:#ff4b4b'>👑 SS</td><td style='color:#ff4b4b'>✔매수가능</td><td>지표 10개 이상, 수익 10%↑</td><td>기계적 풀(분할) 매수</td></tr>
+            <tr><td>🥈 <b>2위</b></td><td style='color:#ff9f4b'>💎 S</td><td style='color:#ff4b4b'>✔매수가능</td><td>지표 8개 이상, 기간 짧음</td><td>1위 없을 시 대안 매수</td></tr>
+            <tr><td>🥉 <b>3위</b></td><td style='color:#ff4b4b'>👑 SS</td><td style='color:#4b8bff'>⚠️ 매수대기</td><td>수익률 높지만 이미 급등</td><td>보물함 담고 대기</td></tr>
+        </table>
+    """, unsafe_allow_html=True)
 
     if st.session_state.searched_stock:
         m = all_stocks_df[all_stocks_df['Name'] == st.session_state.searched_stock]
         if not m.empty:
-            with st.spinner(f"'{st.session_state.searched_stock}' 분석 중..."):
-                res = analyze_logic({'코드': m.iloc[0]['Code'], '종목명': m.iloc[0]['Name']})
-                if res: render_compact(res, "search")
-                else: st.error("❌ 현재 거래소 서버 점검 시간인 것 같아. (밤/주말)")
-        else:
-            st.warning("정확한 종목 이름을 입력해줘!")
+            res = analyze_logic({'코드': m.iloc[0]['Code'], '종목명': m.iloc[0]['Name']})
+            if res: render_compact(res, "search")
+            else: st.error("❌ 데이터 응답 없음.")
+        else: st.warning("정확한 이름을 입력해줘!")
 
 with t2:
     if st.button("📡 [터보 스캔] SS등급 추출", use_container_width=True):
-        try:
-            p_bar = st.progress(0, text="📡 우량 종목 스캔 중...")
-            final = []
-            with concurrent.futures.ThreadPoolExecutor(max_workers=20) as ex:
-                futures = [ex.submit(analyze_logic, {'코드': r.Code, '종목명': r.Name}) for r in all_stocks_df.itertuples()]
-                for i, f in enumerate(concurrent.futures.as_completed(futures)):
-                    res = f.result()
-                    if res: final.append(res)
-                    if i % 50 == 0: p_bar.progress((i+1)/len(all_stocks_df), text=f"💎 {i+1}개 종목 검사 완료...")
-            st.session_state.rt_results = sorted(final, key=lambda x: (x['등급'], x['점수'], x['수익%']), reverse=True)[:30]
-            p_bar.empty()
-            if not final: st.error("❌ 데이터 응답이 없어. 거래소 점검 시간인지 확인해줘!")
-        except: st.error("❌ 거래소 서버 연결 실패!")
-    
+        p_bar = st.progress(0, text="📡 전 종목 스캔 중...")
+        final = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=25) as ex:
+            futures = [ex.submit(analyze_logic, {'코드': r.Code, '종목명': r.Name}) for r in all_stocks_df.itertuples()]
+            for i, f in enumerate(concurrent.futures.as_completed(futures)):
+                res = f.result()
+                if res: final.append(res)
+                if i % 50 == 0: p_bar.progress((i+1)/len(all_stocks_df), text=f"💎 {i+1}개 완료...")
+        st.session_state.rt_results = sorted(final, key=lambda x: (x['등급'], x['점수'], x['수익률']), reverse=True)[:30]
+        p_bar.empty()
     if st.session_state.rt_results:
         for i, r in enumerate(st.session_state.rt_results): render_compact(r, f"radar_{i}")
 
@@ -191,12 +200,10 @@ with t3:
     if st.session_state.favorites:
         if st.button("🔄 보물함 새로고침", use_container_width=True): st.rerun()
         fav_l = []
-        with st.spinner("보물함 정밀 분석 중..."):
-            for fn in st.session_state.favorites:
-                m = all_stocks_df[all_stocks_df['Name'] == fn]
-                if not m.empty:
-                    res = analyze_logic({'코드': m.iloc[0]['Code'], '종목명': fn})
-                    if res: fav_l.append(res)
-        if not fav_l: st.error("❌ 지금은 데이터를 불러올 수 없어. (점검 시간)")
+        for fn in st.session_state.favorites:
+            m = all_stocks_df[all_stocks_df['Name'] == fn]
+            if not m.empty:
+                res = analyze_logic({'코드': m.iloc[0]['Code'], '종목명': fn})
+                if res: fav_l.append(res)
         for i, r in enumerate(fav_l): render_compact(r, f"fav_{i}")
     else: st.info("보물함이 비어 있어!")
