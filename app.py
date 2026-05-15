@@ -3,207 +3,152 @@ import FinanceDataReader as fdr
 import pandas as pd
 from datetime import datetime, timedelta
 import concurrent.futures
-import numpy as np
 import json
 import os
 
 # ==========================================
-# 🚨 보안 시스템 (6006)
+# 📱 모바일 UI 최적화 설정
 # ==========================================
-def check_password():
-    def password_entered():
-        if st.session_state["password"] == "6006": 
-            st.session_state["password_correct"] = True
-            del st.session_state["password"] 
-        else:
-            st.session_state["password_correct"] = False
-    if "password_correct" not in st.session_state:
-        st.markdown("<h4 style='text-align: center; color: #d4af37;'> 🍀오늘도쨔잔!!🍀</h4>", unsafe_allow_html=True)
-        st.text_input("헤헿💛", type="password", on_change=password_entered, key="password")
-        return False
-    return True
-
-if not check_password():
-    st.stop()
-
-# --- 앱 설정 ---
-st.set_page_config(page_title="💰 데이터 스튜디오 💰", layout="wide")
+st.set_page_config(page_title="💰 JJ-Money Mobile", layout="centered")
 
 st.markdown("""
     <style>
-    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
-    html, body, [class*="css"]  { font-family: 'Pretendard', sans-serif; }
-    .stApp { background-color: #0d1117; color: #c9d1d9; }
-    .analysis-box { background-color: #161b22; border: 1px solid #30363d; padding: 10px; border-radius: 10px; margin-top: 5px; }
-    .price-container { display: flex; justify-content: space-between; gap: 5px; margin-bottom: 5px; }
-    .price-card { background: #1c2128; padding: 10px 5px; border-radius: 10px; text-align: center; border: 1px solid #30363d; flex: 1; }
-    .indicator-grid { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
-    .ind-item { padding: 2px 8px; border-radius: 15px; font-size: 10px; font-weight: bold; border: 1px solid #444; }
-    .ss-badge { color: #ff4b4b; border: 1.5px solid #ff4b4b; padding: 1px 6px; border-radius: 5px; font-weight: 900; font-size: 14px; }
-    .predict-box { background: rgba(212, 175, 55, 0.1); border: 1px solid #d4af37; padding: 8px; border-radius: 8px; margin-top: 5px; font-size: 12px; color: #d4af37; text-align: center; }
-    /* 가이드 테이블 스타일 */
-    .guide-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; margin-bottom: 20px; border: 1px solid #30363d; }
-    .guide-table th { background-color: #1c2128; color: #777; padding: 8px; border: 1px solid #30363d; }
-    .guide-table td { padding: 8px; border: 1px solid #30363d; text-align: center; }
+    .stButton>button { width: 100%; height: 3.5em; font-size: 20px; font-weight: bold; border-radius: 12px; margin-bottom: 10px; }
+    .main-title { text-align: center; color: #d4af37; font-size: 26px; font-weight: bold; margin-bottom: 20px; }
+    .alert-box { background-color: #ff4b4b; color: white; padding: 20px; border-radius: 12px; text-align: center; font-size: 18px; font-weight: bold; margin-bottom: 15px; }
+    .stock-card { background: #1c2128; padding: 15px; border-radius: 12px; border: 1px solid #30363d; margin-bottom: 15px; }
+    .price-text { font-size: 20px; color: #ffffff; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 데이터 관리 ---
-DATA_FILE = "jj_user_data.json"
+# 데이터 저장 (클라우드용 파일명)
+DATA_FILE = "jj_mobile_account.json"
+
 def load_data():
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, "r", encoding="utf-8") as f: return json.load(f)
         except: pass
-    return {"favorites": []}
-def save_data():
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump({"favorites": st.session_state.favorites}, f, ensure_ascii=False)
+    return []
 
-if 'data_loaded' not in st.session_state:
-    loaded = load_data(); st.session_state.favorites = loaded.get("favorites", []); st.session_state.data_loaded = True
-if 'rt_results' not in st.session_state: st.session_state.rt_results = []
-if 'searched_stock' not in st.session_state: st.session_state.searched_stock = "" 
+def save_data(data):
+    with open(DATA_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=4)
 
+# ==========================================
+# 🔐 비밀번호 전용 입장 (ID 필요 없음!)
+# ==========================================
+if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
+
+if not st.session_state["authenticated"]:
+    st.markdown("<p class='main-title'>🍀오늘도쨔잔!!🍀</p>", unsafe_allow_html=True)
+    pw = st.text_input("헤헿", type="password")
+    if st.button("입장하기 🚀"):
+        if pw == "6006":
+            st.session_state["authenticated"] = True
+            st.rerun()
+        else: st.error("다시다시")
+    st.stop()
+
+# --- 데이터 불러오기 ---
+if 'my_stocks' not in st.session_state:
+    st.session_state.my_stocks = load_data()
+
+# ==========================================
+# 🚨 [팔자!] 폰 상단 빨간 알림
+# ==========================================
+today_str = datetime.now().strftime('%Y-%m-%d')
+sell_list = [s['name'] for s in st.session_state.my_stocks if s.get('status') == 'BOUGHT' and s.get('sell_date') <= today_str]
+
+if sell_list:
+    for name in sell_list:
+        st.markdown(f"<div class='alert-box'>🚨 오늘 '{name}' 무조건 팔자! 💰</div>", unsafe_allow_html=True)
+
+# ==========================================
+# 🎯 오점 없는 정밀 분석 엔진
+# ==========================================
 @st.cache_data(ttl=3600)
-def load_active_stocks():
+def get_all_stocks(): 
+    return fdr.StockListing('KRX')[['Code', 'Name']].dropna()
+
+def analyze_perfect(item):
     try:
-        df = fdr.StockListing('KRX')
-        df['Name'] = df['Name'].str.strip()
-        return df.sort_values(by='Marcap', ascending=False).head(1200)
-    except:
-        return pd.DataFrame({'Code': ['005930'], 'Name': ['삼성전자']})
-
-all_stocks_df = load_active_stocks()
-
-# --- 정밀 분석 & 예측 엔진 ---
-def analyze_logic(item):
-    try:
-        end_date = datetime.now().strftime('%Y-%m-%d')
-        df = fdr.DataReader(item['코드'], (datetime.now() - timedelta(days=150)).strftime('%Y-%m-%d'), end_date)
-        if df is None or len(df) < 60: return None
+        # 8시 30분에 어제까지의 기세를 분석함
+        df = fdr.DataReader(item['Code'], (datetime.now() - timedelta(days=50)).strftime('%Y-%m-%d'))
+        if len(df) < 20: return None
         
-        close = df['Close']
-        ma5 = close.rolling(5).mean(); ma20 = close.rolling(20).mean(); ma60 = close.rolling(60).mean()
-        delta = close.diff(); gain = (delta.where(delta > 0, 0)).rolling(14).mean(); loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-        rsi = 100 - (100 / (1 + (gain/(loss+1e-9))))
-        obv = (np.sign(close.diff()) * df['Volume']).fillna(0).cumsum()
+        last = df.iloc[-1]
+        curr_price = int(last['Close'])
+        vol_avg = df['Volume'].iloc[-10:-1].mean()
         
-        curr, high_60, low_20 = close.iloc[-1], df['High'].iloc[-60:].max(), df['Low'].iloc[-20:].min()
-        support = round(ma20.iloc[-1] if curr > ma20.iloc[-1] else ma60.iloc[-1], 0)
-        buy_min, buy_max = round(support * 0.99, 0), round(support * 1.02, 0)
-        target_exit, stop_loss = round(high_60, 0), round(support * 0.96, 0)
+        # 1. 🔥 오늘 사자 (오늘 당장 튈 놈 - 거래량 2.5배 폭발)
+        if last['Volume'] > vol_avg * 2.5 and last['Close'] > last['Open']:
+            return {"type": "🔥 오늘 사자", "name": item['Name'], "code": item['Code'], "price": curr_price, "sell_date": today_str}
         
-        exp_yield = round(((target_exit - curr) / curr) * 100, 1)
-        daily_vol = df['Close'].pct_change().std() * 100
-        days_to_target = int(abs(exp_yield) / (daily_vol + 0.5)) + 3
-        predict_period = f"약 {days_to_target-2}~{days_to_target+5}일 이내" if exp_yield > 0 else "추세 확인 필요"
-
-        scores = [
-            df['Volume'].iloc[-1] > df['Volume'].iloc[-5:-1].mean()*1.3,
-            ma5.iloc[-1] > ma20.iloc[-1], curr > df['Open'].iloc[-1],
-            curr > df['High'].iloc[-10:-1].max(), 30 < rsi.iloc[-1] < 70,
-            curr <= low_20 * 1.15, (df['High'].iloc[-20:].max() - df['Low'].iloc[-20:].min())/curr < 0.1,
-            obv.iloc[-1] > obv.iloc[-5], (rsi.iloc[-1] > rsi.iloc[-5]) and (curr < close.iloc[-5]),
-            curr > ma20.iloc[-1], exp_yield >= 10, ma20.iloc[-1] > ma20.iloc[-10]
-        ]
-        total_score = sum(scores)
-        is_buy_zone = buy_min <= curr <= buy_max
-        tier = "👑 SS" if total_score >= 10 and is_buy_zone else ("💎 S" if total_score >= 8 else "✅ A")
-
-        return {
-            "등급": tier, "종목": item['종목명'], "코드": item['코드'], "가격": int(curr),
-            "수익률": exp_yield, "기간": predict_period,
-            "진입가": f"{int(buy_min):,}", "목표가": f"{int(target_exit):,}", "손절가": f"{int(stop_loss):,}",
-            "점수": total_score, "지표": scores, "상태": "✔매수가능" if is_buy_zone else "⏳대기"
-        }
+        # 2. 🛡️ 며칠 후 사자 (안전 바닥 - 정배열 초기)
+        ma5 = df['Close'].rolling(5).mean().iloc[-1]
+        ma20 = df['Close'].rolling(20).mean().iloc[-1]
+        if ma5 > ma20 and last['Close'] > ma5:
+            sell_d = (datetime.now() + timedelta(days=3)).strftime('%Y-%m-%d')
+            return {"type": "🛡️ 며칠 후 사자", "name": item['Name'], "code": item['Code'], "price": curr_price, "sell_date": sell_d}
+            
+        return None
     except: return None
 
-# --- UI 렌더링 ---
-def render_compact(res, key):
-    st.markdown(f"""
-        <div style='display: flex; align-items: center; margin-bottom: 5px;'>
-            <span class='ss-badge'>{res['등급']}</span>
-            <span style='font-size: 16px; font-weight: bold; margin-left: 8px;'>{res['종목']}</span>
-            <span style='color: #ffffff; font-size: 16px; font-weight: bold; margin-left: 10px;'>{res['가격']:,}원</span>
-            <span style='font-size: 11px; color: #777; margin-left: auto;'>{res['상태']}</span>
-        </div>
-    """, unsafe_allow_html=True)
+# ==========================================
+# 🖥️ 모바일 UI (탭 구조)
+# ==========================================
+tab1, tab2 = st.tabs(["🔍 종목찾기", "💰 내 장부"])
+
+with tab1:
+    s_word = st.text_input("종목명 (한 글자도 OK!)", placeholder="예: 대성, 삼성")
+    all_stocks = get_all_stocks()
+    if s_word:
+        found = all_stocks[all_stocks['Name'].str.contains(s_word, case=False, na=False)]
+        if not found.empty:
+            for _, row in found.head(5).iterrows():
+                if st.button(f"🧐 {row['Name']} 분석하기"):
+                    res = analyze_perfect({'Code': row['Code'], 'Name': row['Name']})
+                    if res:
+                        st.success(f"### {res['type']}!\n추천가: {res['price']:,}원 | 매도: {res['sell_date']}")
+                        if st.button(f"⭐ {res['name']} 보물함 담기"):
+                            st.session_state.my_stocks.append({**res, "status": "WISH", "buy_price": 0})
+                            save_data(st.session_state.my_stocks)
+                            st.success("보물함에 잘 넣었어! '내 장부'에서 확인해!")
+                    else: st.warning("지금은 사기에 애매해. 다른 종목을 보자!")
+        else: st.error("그런 이름의 종목은 없어!")
+
+with tab2:
+    st.subheader("📋 쩡아의 실전 매매 장부")
     
-    st.markdown(f"""
-        <div class='price-container'>
-            <div class='price-card'><small style='color:#777'>진입가</small><br><b style='color:#ff4b4b'>{res['진입가']}</b></div>
-            <div class='price-card'><small style='color:#777'>목표가</small><br><b style='color:#4CAF50'>{res['목표가']}</b></div>
-            <div class='price-card'><small style='color:#777'>손절가</small><br><b style='color:#4b8bff'>{res['손절가']}</b></div>
-        </div>
-    """, unsafe_allow_html=True)
+    # 1. 예약 대기 (WISH)
+    st.markdown("---")
+    st.write("🧐 **살까 말까 (예약 대기)**")
+    for i, s in enumerate(st.session_state.my_stocks):
+        if s['status'] == "WISH":
+            with st.container():
+                st.markdown(f"<div class='stock-card'><b>{s['name']}</b> ({s['type']})<br><small>추천: {s['price']:,}원 | 매도: {s['sell_date']}</small></div>", unsafe_allow_html=True)
+                b_p = st.number_input("실제 체결가", key=f"bp_{i}", value=s['price'])
+                if st.button("구매 완료 ✅", key=f"done_{i}"):
+                    s['status'] = "BOUGHT"; s['buy_price'] = b_p
+                    save_data(st.session_state.my_stocks); st.rerun()
+                if st.button("삭제 🗑️", key=f"del_w_{i}"):
+                    st.session_state.my_stocks.pop(i)
+                    save_data(st.session_state.my_stocks); st.rerun()
 
-    st.markdown(f"""
-        <div class='predict-box'>
-            🚀 <b>예상 수익률: {res['수익률']}%</b> | 📅 <b>예상 상승 기간: {res['기간']}</b>
-        </div>
-    """, unsafe_allow_html=True)
-
-    names = ["거래량", "골든C", "양봉", "전고돌파", "RSI안전", "바닥지지", "응축", "수급우향", "매집신호", "중심선위", "탄력성", "추세안정"]
-    indicators_html = "".join([f"<span class='ind-item' style='background:{'rgba(255,75,75,0.15)' if val else 'transparent'}; border-color:{'#ff4b4b' if val else '#444'}; color:{'#ff4b4b' if val else '#777'}'>{name}</span>" for name, val in zip(names, res['지표'])])
-    st.markdown(f"<div class='analysis-box'><div class='indicator-grid'>{indicators_html}</div></div>", unsafe_allow_html=True)
-    
-    if st.button(f"{'❌ 보물함 삭제' if res['종목'] in st.session_state.favorites else '⭐ 보물함 추가'}", key=f"btn_{res['종목']}_{key}", use_container_width=True):
-        if res['종목'] in st.session_state.favorites: st.session_state.favorites.remove(res['종목'])
-        else: st.session_state.favorites.append(res['종목'])
-        save_data(); st.rerun()
-    st.divider()
-
-# --- 앱 메인 레이아웃 ---
-st.markdown("<h4 style='text-align: center; color: #d4af37;'>🌷무조건잘된다니까🌷</h4>", unsafe_allow_html=True)
-t1, t2, t3 = st.tabs(["🔍검색", "📡SS레이더", "⭐보물함"])
-
-with t1:
-    s_in = st.text_input("종목명 입력", "")
-    if st.button("즉시 분석", use_container_width=True):
-        st.session_state.searched_stock = s_in.strip()
-    
-    # [쩡아 요청] 기계적 매수 순위 가이드 테이블
-    st.markdown("""
-        <table class='guide-table'>
-            <tr><th>순위</th><th>등급</th><th>상태</th><th>핵심 포인트</th><th>액션 계획</th></tr>
-            <tr><td>🥇 <b>1위</b></td><td style='color:#ff4b4b'>👑 SS</td><td style='color:#ff4b4b'>✔매수가능</td><td>지표 10개 이상, 수익 10%↑</td><td>기계적 풀(분할) 매수</td></tr>
-            <tr><td>🥈 <b>2위</b></td><td style='color:#ff9f4b'>💎 S</td><td style='color:#ff4b4b'>✔매수가능</td><td>지표 8개 이상, 기간 짧음</td><td>1위 없을 시 대안 매수</td></tr>
-            <tr><td>🥉 <b>3위</b></td><td style='color:#ff4b4b'>👑 SS</td><td style='color:#4b8bff'>⚠️ 매수대기</td><td>수익률 높지만 이미 급등</td><td>보물함 담고 대기</td></tr>
-        </table>
-    """, unsafe_allow_html=True)
-
-    if st.session_state.searched_stock:
-        m = all_stocks_df[all_stocks_df['Name'] == st.session_state.searched_stock]
-        if not m.empty:
-            res = analyze_logic({'코드': m.iloc[0]['Code'], '종목명': m.iloc[0]['Name']})
-            if res: render_compact(res, "search")
-            else: st.error("❌ 데이터 응답 없음.")
-        else: st.warning("정확한 이름을 입력해줘!")
-
-with t2:
-    if st.button("📡 [터보 스캔] SS등급 추출", use_container_width=True):
-        p_bar = st.progress(0, text="📡 전 종목 스캔 중...")
-        final = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=25) as ex:
-            futures = [ex.submit(analyze_logic, {'코드': r.Code, '종목명': r.Name}) for r in all_stocks_df.itertuples()]
-            for i, f in enumerate(concurrent.futures.as_completed(futures)):
-                res = f.result()
-                if res: final.append(res)
-                if i % 50 == 0: p_bar.progress((i+1)/len(all_stocks_df), text=f"💎 {i+1}개 완료...")
-        st.session_state.rt_results = sorted(final, key=lambda x: (x['등급'], x['점수'], x['수익률']), reverse=True)[:30]
-        p_bar.empty()
-    if st.session_state.rt_results:
-        for i, r in enumerate(st.session_state.rt_results): render_compact(r, f"radar_{i}")
-
-with t3:
-    if st.session_state.favorites:
-        if st.button("🔄 보물함 새로고침", use_container_width=True): st.rerun()
-        fav_l = []
-        for fn in st.session_state.favorites:
-            m = all_stocks_df[all_stocks_df['Name'] == fn]
-            if not m.empty:
-                res = analyze_logic({'코드': m.iloc[0]['Code'], '종목명': fn})
-                if res: fav_l.append(res)
-        for i, r in enumerate(fav_l): render_compact(r, f"fav_{i}")
-    else: st.info("보물함이 비어 있어!")
+    # 2. 보유 종목 (BOUGHT)
+    st.markdown("---")
+    st.write("💰 **내 지갑 (보유 중)**")
+    for i, s in enumerate(st.session_state.my_stocks):
+        if s['status'] == "BOUGHT":
+            profit = ((s['price'] - s['buy_price']) / s['buy_price']) * 100
+            color = "#ff4b4b" if profit > 0 else "#4b8bff"
+            st.markdown(f"""
+                <div class='stock-card' style='border-left: 8px solid {color};'>
+                    <span style='font-size:18px;'><b>{s['name']}</b></span> | 
+                    수익률: <span style='color:{color}'><b>{profit:.2f}%</b></span><br>
+                    <small>매수가: {s['buy_price']:,} | 매도 예정: {s['sell_date']}</small>
+                </div>
+            """, unsafe_allow_html=True)
+            if st.button("팔았다! (삭제) 💸", key=f"sell_{i}"):
+                st.session_state.my_stocks.pop(i)
+                save_data(st.session_state.my_stocks); st.rerun()
