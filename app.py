@@ -5,11 +5,9 @@ from datetime import datetime, timedelta
 import concurrent.futures
 import json
 import os
-import time
 
-# --- 📱 모바일 최적화 ---
-st.set_page_config(page_title="❤❤❤❤❤❤❤❤", layout="centered")
-
+# --- 📱 모바일 최적화 및 스타일 ---
+st.set_page_config(page_title="❤❤❤❤❤❤❤", layout="centered")
 st.markdown("""
     <style>
     .stButton>button { width: 100%; height: 3.5em; font-size: 18px; font-weight: bold; border-radius: 12px; margin-bottom: 8px; }
@@ -37,14 +35,13 @@ if not st.session_state["authenticated"]:
     st.markdown("<p class='main-title'>❤오늘도짜쟌❤</p>", unsafe_allow_html=True)
     pw = st.text_input("헤헿", type="password")
     if st.button("입장하기 🚀"):
-        if pw == "6006":
+        if pw == "2727":
             st.session_state["authenticated"] = True
             st.rerun()
-        else: st.error("틀렸어!")
+        else: st.error("비밀번호가 틀렸어!")
     st.stop()
 
-if 'my_stocks' not in st.session_state:
-    st.session_state.my_stocks = load_data()
+if 'my_stocks' not in st.session_state: st.session_state.my_stocks = load_data()
 
 # --- 🚨 팔자 알림 ---
 today_str = datetime.now().strftime('%Y-%m-%d')
@@ -53,20 +50,28 @@ if sell_list:
     for name in sell_list:
         st.markdown(f"<div class='alert-box'>🚨 오늘 '{name}' 팔자! 💰</div>", unsafe_allow_html=True)
 
-# --- 🎯 분석 엔진 ---
+# --- 🎯 [우회 버전] 전 종목 로드 엔진 ---
 @st.cache_data(ttl=3600)
 def get_all_stocks(): 
-    try: return fdr.StockListing('KRX')[['Code', 'Name']].dropna()
-    except: return pd.DataFrame({'Code':['005930','128820'], 'Name':['삼성전자','대성산업']})
+    try:
+        # KRX 대신 더 안정적인 네이버 금융 리스트 우회 (KOSPI/KOSDAQ 합체)
+        kospi = fdr.StockListing('KOSPI')[['Code', 'Name']]
+        kosdaq = fdr.StockListing('KOSDAQ')[['Code', 'Name']]
+        return pd.concat([kospi, kosdaq]).dropna().drop_duplicates()
+    except:
+        # 마지막 수단: 직접 종목 데이터를 요청해서라도 앱 유지
+        return fdr.StockListing('KRX')[['Code', 'Name']].dropna()
 
 def analyze_v2(item):
     try:
-        df = fdr.DataReader(item['Code'], (datetime.now() - timedelta(days=40)).strftime('%Y-%m-%d'))
+        df = fdr.DataReader(item['Code'], (datetime.now() - timedelta(days=45)).strftime('%Y-%m-%d'))
         if len(df) < 15: return None
         last = df.iloc[-1]
         vol_avg = df['Volume'].iloc[-10:-1].mean()
-        if last['Volume'] > vol_avg * 2.5:
+        # 🔥 오늘 사자: 전일 대비 거래량 2.5배 폭발 + 양봉
+        if last['Volume'] > vol_avg * 2.5 and last['Close'] > last['Open']:
             return {"type": "🔥 오늘 사자", "name": item['Name'], "code": item['Code'], "price": int(last['Close']), "sell_date": today_str}
+        # 🛡️ 며칠 사자: 20일선 위 + 정배열 초기
         elif last['Close'] > df['Close'].rolling(20).mean().iloc[-1]:
             sell_d = (datetime.now() + timedelta(days=3)).strftime('%Y-%m-%d')
             return {"type": "🛡️ 며칠 사자", "name": item['Name'], "code": item['Code'], "price": int(last['Close']), "sell_date": sell_d}
@@ -76,60 +81,61 @@ def analyze_v2(item):
 tab1, tab2, tab3 = st.tabs(["🔍 찾기", "📡 레이더", "💰 장부"])
 
 with tab1:
-    s_word = st.text_input("종목명", placeholder="예: 대성")
+    s_word = st.text_input("종목명 (대성, 삼성 등)", placeholder="여기에 입력!")
     all_s = get_all_stocks()
     if s_word:
         found = all_s[all_s['Name'].str.contains(s_word, case=False, na=False)]
-        for _, row in found.head(3).iterrows():
-            if st.button(f"🧐 {row['Name']} 분석"):
-                res = analyze_v2({'Code': row['Code'], 'Name': row['Name']})
-                if res:
-                    st.success(f"**{res['type']}**\n{res['price']:,}원")
-                    if st.button(f"⭐ {res['name']} 담기"):
-                        st.session_state.my_stocks.append({**res, "status": "WISH", "buy_price": 0})
-                        save_data(st.session_state.my_stocks)
-                        st.toast(f"{res['name']} 담기 완료!")
-                        st.rerun() # <--- 쩡아😁! 이게 있어야 바로 장부에 떠!
+        if not found.empty:
+            for _, row in found.head(5).iterrows():
+                if st.button(f"🧐 {row['Name']} 분석", key=f"s_{row['Code']}"):
+                    res = analyze_v2({'Code': row['Code'], 'Name': row['Name']})
+                    if res:
+                        st.success(f"**{res['type']}**\n{res['price']:,}원")
+                        if st.button(f"⭐ {res['name']} 담기", key=f"add_{res['code']}"):
+                            st.session_state.my_stocks.append({**res, "status": "WISH", "buy_price": 0})
+                            save_data(st.session_state.my_stocks); st.toast(f"{res['name']} 담기 완료!"); st.rerun()
+                    else: st.warning("지금은 때가 아니야!")
+        else: st.error("종목을 못 찾겠어!")
 
 with tab2:
-    st.write("📡 **전 종목 레이더 가동**")
+    st.write("📡 **실시간 보물찾기 (상위 500개)**")
     if st.button("🚀 수익 날 종목 다 찾아줘!"):
-        p_bar = st.progress(0, text="보물 찾는 중... 위이잉")
+        p_bar = st.progress(0, text="레이더 가동 중... 위이잉")
         results = []
-        subset = all_s.head(400) # 폰 속도 위해 상위 400개만!
-        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as ex:
+        subset = all_s.head(500) # 시총 상위 500개 우선 스캔
+        with concurrent.futures.ThreadPoolExecutor(max_workers=25) as ex:
             futures = [ex.submit(analyze_v2, {'Code': r.Code, 'Name': r.Name}) for r in subset.itertuples()]
             for i, f in enumerate(concurrent.futures.as_completed(futures)):
                 r = f.result()
                 if r: results.append(r)
-                if i % 40 == 0: p_bar.progress((i+1)/len(subset))
+                if i % 50 == 0: p_bar.progress((i+1)/len(subset))
         p_bar.empty()
         if results:
             for r in results:
-                st.write(f"[{r['type']}] **{r['name']}** ({r['price']:,}원)")
-                if st.button(f"⭐ {r['name']} 담기", key=f"r_{r['code']}"):
-                    st.session_state.my_stocks.append({**r, "status": "WISH", "buy_price": 0})
-                    save_data(st.session_state.my_stocks); st.rerun()
+                with st.container():
+                    st.write(f"[{r['type']}] **{r['name']}** ({r['price']:,}원)")
+                    if st.button(f"⭐ 담기", key=f"r_{r['code']}"):
+                        st.session_state.my_stocks.append({**r, "status": "WISH", "buy_price": 0})
+                        save_data(st.session_state.my_stocks); st.rerun()
+        else: st.info("지금 레이더에 걸린 종목이 없어!")
 
 with tab3:
-    st.subheader("❤무조건잘된다니까❤")
-    # 살까 말까
+    st.subheader("💖무조건잘된다니까💖")
     wishes = [s for s in st.session_state.my_stocks if s['status'] == "WISH"]
     if wishes:
-        st.write("🧐 **살까 말까 (대기)**")
+        st.write("🧐 **살까 말까 (예약대기)**")
         for i, s in enumerate(st.session_state.my_stocks):
             if s['status'] == "WISH":
                 with st.container():
-                    st.markdown(f"<div class='stock-card'><b>{s['name']}</b> ({s['type']})</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='stock-card'><b>{s['name']}</b> ({s['type']})</div>", unsafe_red_html=True)
                     b_p = st.number_input("매수가", key=f"bp_{i}", value=s['price'])
                     if st.button("구매 완료 ✅", key=f"done_{i}"):
                         s['status'] = "BOUGHT"; s['buy_price'] = b_p
                         save_data(st.session_state.my_stocks); st.rerun()
                     if st.button("삭제 🗑️", key=f"del_{i}"):
                         st.session_state.my_stocks.pop(i); save_data(st.session_state.my_stocks); st.rerun()
-    # 내 지갑
     st.divider()
-    st.write("💰 **내 지갑 (보유)**")
+    st.write("💰 **내 지갑 (보유중)**")
     for i, s in enumerate(st.session_state.my_stocks):
         if s['status'] == "BOUGHT":
             profit = ((s['price'] - s['buy_price']) / s['buy_price']) * 100
