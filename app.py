@@ -47,7 +47,7 @@ if not st.session_state["authenticated"]:
 
 if 'my_stocks' not in st.session_state: st.session_state.my_stocks = load_data()
 
-#3 --- 🎯 12가지 정밀 분석 엔진 (공부용 기능 추가) ---
+#3 --- 🎯 12가지 정밀 분석 엔진 ---
 @st.cache_data(ttl=3600)
 def get_all_stocks():
     try:
