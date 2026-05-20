@@ -109,7 +109,7 @@ def analyze_quant_sniper(item, mode="RADAR"):
 
 #4 --- 📱 메인 UI ---
 all_s = get_all_stocks()
-tab1, tab2, tab3, tab4 = st.tabs(["🔍 딥서치", "🔥 퀀트급등", "📡 스윙레이더", "💰 내지갑"])
+tab1, tab2, tab3, tab4 = st.tabs(["🔍검색", "🎁당일", "📡장기", "💰보물함"])
 
 with tab1:
     s_word = st.text_input("종목명 검색", placeholder="타겟 종목 입력")
@@ -200,7 +200,7 @@ with tab3:
                     save_data(st.session_state.my_stocks); st.rerun()
 
 with tab4:
-    st.markdown("<h3 style='text-align:center;'>💖무조건잘된다니까💖</h3>", unsafe_allow_html=True)
+    st.markdown("<h4 style='text-align:center;'>💓무조건잘된다니까💓</h4>", unsafe_allow_html=True)
     st.write("💰 **내 지갑 (수익률 관리소)**")
     boughts = [s for s in st.session_state.my_stocks if s.get('status') == "BOUGHT"]
     if boughts:
