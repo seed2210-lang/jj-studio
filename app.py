@@ -8,7 +8,7 @@ import os
 import numpy as np
 
 #1 --- 📱 모바일 최적화 및 스타일 ---
-st.set_page_config(page_title="💖💖💖💖💖💖💖💖💖💖💖", layout="centered")
+st.set_page_config(page_title="💖💖💖💖💖💖💖💖💖", layout="centered")
 st.markdown("""
     <style>
     .stButton>button { width: 100%; height: 3.5em; font-size: 16px; font-weight: bold; border-radius: 12px; margin-bottom: 8px; }
@@ -38,7 +38,7 @@ def save_data(data):
 if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
 if not st.session_state["authenticated"]:
     st.markdown("<p class='main-title'>🌹오늘도짜쟌🌹</p>", unsafe_allow_html=True)
-    pw = st.text_input"헤헿(●'◡'●)", type="password")
+    pw = st.text_input("(헤헿(●'◡'●))", type="password")
     if st.button("입장하기 🚀"):
         if pw == "2727":
             st.session_state["authenticated"] = True
